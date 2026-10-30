@@ -1,0 +1,153 @@
+@import 'tailwindcss';
+@plugin "daisyui" {
+  themes:
+    light --default,
+    dark --prefersdark;
+}
+
+html,
+body {
+  height: 100%;
+  overflow-x: clip;
+}
+
+/* Soft gradient blobs give the frosted panels something to blur */
+body {
+  background-color: var(--color-base-200);
+  background-image:
+    radial-gradient(40rem 30rem at 8% -5%, color-mix(in oklab, var(--color-primary) 28%, transparent), transparent 70%),
+    radial-gradient(
+      36rem 28rem at 100% 10%,
+      color-mix(in oklab, var(--color-secondary) 22%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(40rem 30rem at 50% 110%, color-mix(in oklab, var(--color-accent) 20%, transparent), transparent 70%);
+  background-attachment: fixed;
+}
+
+/* Glass surfaces: blurred, but opaque enough that text stays readable */
+.glass-panel {
+  background-color: color-mix(in oklab, var(--color-base-100) 72%, transparent);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent);
+  border-radius: var(--radius-box);
+  box-shadow: 0 6px 24px -10px rgb(0 0 0 / 0.25);
+}
+.glass-strong {
+  background-color: color-mix(in oklab, var(--color-base-100) 88%, transparent);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  border: 1px solid color-mix(in oklab, var(--color-base-content) 14%, transparent);
+}
+.glass-backdrop {
+  background-color: rgb(0 0 0 / 0.35);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.glass-bar {
+  background-color: color-mix(in oklab, var(--color-base-100) 65%, transparent);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  border-bottom: 1px solid color-mix(in oklab, var(--color-base-content) 10%, transparent);
+}
+
+/* Sticky table header stays legible while rows scroll beneath */
+.table-pin-rows thead tr {
+  background-color: color-mix(in oklab, var(--color-base-100) 94%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.drop-zone {
+  border: 2px dashed color-mix(in oklab, var(--color-base-content) 25%, transparent);
+  border-radius: var(--radius-box);
+  transition:
+    border-color 0.15s,
+    background-color 0.15s,
+    transform 0.15s;
+}
+.drop-zone.over {
+  border-color: var(--color-primary);
+  background-color: color-mix(in oklab, var(--color-primary) 12%, transparent);
+  transform: scale(1.01);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.anim-fade {
+  animation: fade-in 0.18s ease-out both;
+}
+.anim-pop {
+  animation: pop-in 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
+}
+.anim-slide {
+  animation: slide-up 0.25s ease-out both;
+}
+.anim-toast {
+  animation: slide-in-right 0.25s ease-out both;
+}
+.lift {
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+.lift:hover {
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-fade,
+  .anim-pop,
+  .anim-slide,
+  .anim-toast {
+    animation: none;
+  }
+  .lift:hover,
+  .drop-zone.over {
+    transform: none;
+  }
+}
+
+/* Mobile: keep tap targets comfortable */
+@media (max-width: 640px) {
+  .btn-xs {
+    min-height: 2rem;
+  }
+}

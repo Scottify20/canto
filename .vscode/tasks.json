@@ -1,0 +1,36 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Auto-Start Python Backend",
+      "type": "shell",
+      "command": "venv/bin/python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000",
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "runOptions": {
+        "runOn": "folderOpen"
+      },
+      "presentation": {
+        "group": "servers",
+        "panel": "split",
+        "clear": true
+      }
+    },
+    {
+      "label": "Auto-Start Angular Frontend",
+      "type": "shell",
+      "command": "npm start",
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "runOptions": {
+        "runOn": "folderOpen"
+      },
+      "presentation": {
+        "group": "servers",
+        "clear": true
+      }
+    }
+  ]
+}

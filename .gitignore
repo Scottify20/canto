@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Node and frontend build output
+node_modules/
+/frontend/dist/
+/frontend/.angular/
+/frontend/coverage/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Local Beets configuration, library databases, and HTTP cache
+/backend/beets_data/
+
+# Logs and operating-system files
+*.log
+.DS_Store
+Thumbs.db

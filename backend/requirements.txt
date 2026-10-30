@@ -1,0 +1,14 @@
+beets>=2.14
+fastapi
+uvicorn
+requests
+pyacoustid
+python3-discogs-client
+Pillow
+PyYAML
+mediafile
+mutagen
+numpy
+
+# Optional, improves accuracy: essentia (key detection). Install rsgain separately for faster ReplayGain.
+essentia
