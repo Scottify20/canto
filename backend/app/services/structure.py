@@ -7,6 +7,7 @@ from .beets_engine import with_fallbacks
 SAMPLES = [
     {"artist": "Daft Punk", "albumartist": "Daft Punk", "album": "Random Access Memories", "title": "Get Lucky", "track": 8, "disc": 1, "year": 2013, "genres": ["Electronic"], "format": "FLAC"},
     {"artist": "Laufey, Philharmonia Orchestra", "albumartist": "", "album": "", "title": "Let You Break My Heart Again", "track": 1, "disc": 1, "year": 2024, "genres": ["Jazz"], "format": "MP3"},
+    {"artist": "Dua Lipa", "albumartist": "Dua Lipa", "album": "Future Nostalgia", "title": "Levitating", "track": 5, "disc": 1, "year": 2020, "genres": ["Pop"], "format": "M4A", "channels": 6},
 ]
 
 

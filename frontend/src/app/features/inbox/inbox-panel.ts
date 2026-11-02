@@ -21,7 +21,7 @@ import { Icon } from '../../shared/icon';
           <div class="text-xs opacity-70 truncate">{{ s.inputPath() || 'Choose an input folder first' }}</div>
         </div>
         <button class="btn btn-sm btn-ghost tooltip tooltip-bottom" data-tip="Re-scan the input folder" [disabled]="inbox.scanning() || !s.inputPath()" (click)="inbox.refresh()">
-          <span [class.animate-spin]="inbox.scanning()"><app-icon name="refresh" /></span> Scan
+          <span class="inline-flex origin-center" [class.animate-spin]="inbox.scanning()"><app-icon name="refresh" /></span> Scan
         </button>
         <button class="btn btn-sm btn-primary" [disabled]="jobs.running() || !inbox.target().length" (click)="inbox.startImport(false)">
           <app-icon name="download" />

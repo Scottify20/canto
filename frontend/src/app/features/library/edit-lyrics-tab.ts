@@ -5,6 +5,7 @@ import { LibraryStore } from '../../core/library.store';
 import { LyricsCandidate, LyricsContent, Track } from '../../core/models';
 import { ToastService } from '../../core/toast.service';
 import { Icon } from '../../shared/icon';
+import { InfoTip } from '../../shared/info-tip';
 import { isTtml } from '../../shared/lyrics-shift';
 import { LyricsPlayer } from './lyrics-player';
 
@@ -18,7 +19,7 @@ function kind_(c: LyricsCandidate, kind: Kind): string | null {
 /** Current lyrics + drag-and-drop import + online candidates with a side-by-side comparison. */
 @Component({
   selector: 'app-edit-lyrics-tab',
-  imports: [Icon, LyricsPlayer],
+  imports: [InfoTip, Icon, LyricsPlayer],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="flex flex-col gap-4">
@@ -32,16 +33,15 @@ function kind_(c: LyricsCandidate, kind: Kind): string | null {
         tabindex="0" (keydown.enter)="picker.click()"
       >
         <app-icon name="upload" [size]="22" class="opacity-70" />
-        <div class="font-medium mt-1">Drop a <code>.lrc</code> or <code>.ttml</code> file here</div>
-        <div class="text-xs opacity-70">or click to choose. It replaces the current lyrics of that type.</div>
+        <div class="font-medium mt-1">Drop a <code>.lrc</code> or <code>.ttml</code> file here <app-info-tip text="Or click to choose. It replaces the current lyrics of that type." /></div>
         <input #picker type="file" class="hidden" accept=".lrc,.ttml,.xml,.txt" multiple (change)="onPick($any($event.target))" />
       </div>
 
       <section>
         <div class="flex items-center gap-2 mb-2">
           <div role="tablist" class="tabs tabs-border tabs-sm grow">
-            <button role="tab" class="tab" [class.tab-active]="kind() === 'lrc'" (click)="setKind('lrc')">LRC {{ current()?.lrc ? '✓' : '' }}</button>
             <button role="tab" class="tab" [class.tab-active]="kind() === 'ttml'" (click)="setKind('ttml')">TTML {{ current()?.ttml ? '✓' : '' }}</button>
+            <button role="tab" class="tab" [class.tab-active]="kind() === 'lrc'" (click)="setKind('lrc')">LRC {{ current()?.lrc ? '✓' : '' }}</button>
           </div>
           @if (kind() === 'ttml' && current()?.ttml_timing) { <span class="badge badge-sm" [class]="current()!.ttml_timing === 'word' ? 'badge-primary' : 'badge-ghost'">{{ current()!.ttml_timing }}-synced</span> }
         </div>
@@ -117,7 +117,7 @@ export class EditLyricsTab implements OnInit {
   track = input.required<Track>();
 
   current = signal<LyricsContent | null>(null);
-  kind = signal<Kind>('lrc');
+  kind = signal<Kind>('ttml');
   draft = signal('');
   player = signal(false);
   previewText = signal('');
@@ -145,7 +145,6 @@ export class EditLyricsTab implements OnInit {
 
   async ngOnInit() {
     await this.reload();
-    if (!this.current()?.lrc && this.current()?.ttml) this.kind.set('ttml');
     this.sync();
   }
 

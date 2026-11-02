@@ -4,11 +4,12 @@ import { JobStore } from '../../core/job.store';
 import { DuplicateAction } from '../../core/models';
 import { SettingsStore } from '../../core/settings.store';
 import { Icon } from '../../shared/icon';
+import { InfoTip } from '../../shared/info-tip';
 import { PathField } from './path-field';
 
 @Component({
   selector: 'app-import-panel',
-  imports: [PathField, Icon],
+  imports: [InfoTip, PathField, Icon],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="glass-panel p-4 flex flex-col gap-3 anim-slide">
@@ -29,11 +30,8 @@ import { PathField } from './path-field';
       <label class="flex items-start gap-3 cursor-pointer">
         <input type="checkbox" class="toggle toggle-sm toggle-warning mt-0.5" [checked]="s.deleteOriginals()" [disabled]="locked()" (change)="s.set('deleteOriginals', $any($event.target).checked)" />
         <span class="text-sm">
-          <span class="font-medium">Delete originals after import</span>
-          <span class="block text-xs opacity-70">
-            @if (s.deleteOriginals()) { Files are <b>moved</b> into the library (lyrics files follow). Emptied input folders are removed. }
-            @else { Files are <b>copied</b>. Your input folder stays untouched. }
-          </span>
+          <span class="font-medium">Delete originals after import
+            <app-info-tip>@if (s.deleteOriginals()) { Files are <b>moved</b> into the library (lyrics files follow). Emptied input folders are removed. } @else { Files are <b>copied</b>. Your input folder stays untouched. }</app-info-tip></span>
         </span>
       </label>
 

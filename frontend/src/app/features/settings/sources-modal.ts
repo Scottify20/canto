@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, output, signal } fr
 import { ProviderState } from '../../core/models';
 import { SettingsStore } from '../../core/settings.store';
 import { Icon } from '../../shared/icon';
+import { InfoTip } from '../../shared/info-tip';
 import { Modal } from '../../shared/modal';
 
 interface Row extends ProviderState {
@@ -11,14 +12,11 @@ interface Row extends ProviderState {
 
 @Component({
   selector: 'app-sources-modal',
-  imports: [Modal, Icon, CdkDropList, CdkDrag, CdkDragHandle],
+  imports: [InfoTip, Modal, Icon, CdkDropList, CdkDrag, CdkDragHandle],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-modal title="Lyrics sources & metadata keys" icon="settings" widthClass="max-w-3xl" (closed)="closed.emit()">
-      <p class="text-sm opacity-80 mb-3">
-        Canto asks every enabled source for lyrics and keeps the best one: word-synced TTML first, then the most accurate line-synced LRC.
-        Sources higher in the list win ties. Drag the handle (or use the arrows) to change priority.
-      </p>
+      <p class="text-sm opacity-80 mb-3">Lyrics sources, in priority order <app-info-tip text="Canto asks every enabled source for lyrics and keeps the best one: word-synced TTML first, then the most accurate line-synced LRC. Sources higher in the list win ties. Drag the handle (or use the arrows) to change priority." /></p>
 
       <ul class="flex flex-col gap-2" cdkDropList (cdkDropListDropped)="drop($event)">
         @for (p of rows(); track p.id; let i = $index) {

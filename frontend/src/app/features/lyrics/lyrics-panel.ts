@@ -3,11 +3,12 @@ import { JobStore } from '../../core/job.store';
 import { LibraryStore } from '../../core/library.store';
 import { SettingsStore } from '../../core/settings.store';
 import { Icon } from '../../shared/icon';
+import { InfoTip } from '../../shared/info-tip';
 
 /** Bulk enrichment tools. They act on the selected rows, or on every row passing the current filter. */
 @Component({
   selector: 'app-lyrics-panel',
-  imports: [Icon],
+  imports: [Icon, InfoTip],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="glass-panel p-4 flex flex-col gap-3 anim-slide">
@@ -35,27 +36,24 @@ import { Icon } from '../../shared/icon';
       </label>
       <label class="flex items-center gap-2 text-sm cursor-pointer">
         <input type="checkbox" class="toggle toggle-xs" [checked]="s.overwriteTtml()" (change)="s.overwriteTtml.set($any($event.target).checked)" />
-        Overwrite existing .ttml
+        Overwrite existing .ttml <app-info-tip text="Overwrite off = tracks that already have lyrics are skipped." />
       </label>
       <label class="flex items-center gap-2 text-sm cursor-pointer">
         <input type="checkbox" class="toggle toggle-xs" [checked]="s.embedLyrics()" (change)="s.embedLyrics.set($any($event.target).checked)" />
-        <span class="tooltip tooltip-right text-left" data-tip="Also writes an unsynced copy into the audio file's tags whenever LRC lyrics are fetched, imported or saved, so players without .lrc support still show lyrics.">Embed lyrics in the audio tags</span>
+        <span>Embed lyrics in the audio tags <app-info-tip text="Also writes an unsynced copy into the audio file's tags whenever LRC lyrics are fetched, imported or saved, so players without .lrc support still show lyrics." /></span>
       </label>
-      <p class="text-xs opacity-60">Overwrite off = tracks that already have lyrics are skipped.</p>
 
       <div class="divider my-0 text-xs">Analysis options</div>
       <label class="flex items-center gap-2 text-sm cursor-pointer">
         <input type="checkbox" class="toggle toggle-xs" [checked]="s.reanalyze()" (change)="s.reanalyze.set($any($event.target).checked)" />
-        Re-analyse already analysed songs
+        Re-analyse already analysed songs <app-info-tip text="Off = only missing gain, key or BPM values are filled in." />
       </label>
-      <p class="text-xs opacity-60">Off = only missing gain, key or BPM values are filled in.</p>
-      <div>
+            <div>
         <div class="flex items-center justify-between text-sm">
-          <span class="tooltip tooltip-right text-left" data-tip="Surround/Atmos files are measured on their stereo downmix and normalised to the same target as stereo songs, so 0 dB already plays them level. Raise it if your player's surround or spatial rendering sounds quieter than stereo, lower it if louder.">Surround loudness offset <app-icon name="help" [size]="12" class="inline opacity-60" /></span>
+          <span>Surround loudness offset <app-info-tip text="Surround/Atmos files are measured on their stereo downmix and normalised to the same target as stereo songs, so 0 dB (default) already plays them level. It applies to songs analysed from now on; tick re-analyse to update existing ones. Raise it if your player's surround or spatial rendering sounds quieter than stereo, lower it if louder." /></span>
           <span class="badge badge-primary badge-sm tabular-nums">{{ s.multichannelGainOffset() > 0 ? '+' : '' }}{{ s.multichannelGainOffset().toFixed(1) }} dB</span>
         </div>
         <input type="range" class="range range-primary range-xs w-full mt-1" min="-12" max="12" step="0.5" aria-label="Surround loudness offset" [disabled]="jobs.running()" [value]="s.multichannelGainOffset()" (input)="s.set('multichannelGainOffset', +$any($event.target).value)" />
-        <p class="text-xs opacity-60">Default 0 dB. Applies to surround songs analysed from now on (tick "re-analyse" to update existing ones).</p>
       </div>
     </section>
   `,

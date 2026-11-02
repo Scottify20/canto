@@ -4,6 +4,7 @@ import { AnimatedCovers } from '../../core/models';
 import { ToastService } from '../../core/toast.service';
 import { formatBytes } from '../../shared/format';
 import { Icon } from '../../shared/icon';
+import { InfoTip } from '../../shared/info-tip';
 
 type Role = 'static' | 'tall' | 'square' | 'skip';
 
@@ -23,7 +24,7 @@ let nextId = 1;
 /** One drop zone for every cover file: pick several images/videos, check the previews, then apply them together. */
 @Component({
   selector: 'app-cover-dropzone',
-  imports: [Icon],
+  imports: [InfoTip, Icon],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div
@@ -36,8 +37,7 @@ let nextId = 1;
       tabindex="0" (keydown.enter)="picker.click()"
     >
       <app-icon name="upload" [size]="22" class="opacity-70" />
-      <div class="font-medium mt-1">Drop covers here</div>
-      <div class="text-xs opacity-70">An image becomes the embedded cover (full resolution). Videos or GIFs become the animated cover; tall or square is detected from the picture. You can drop several at once.</div>
+      <div class="font-medium mt-1">Drop covers here <app-info-tip text="An image becomes the embedded cover (full resolution). Videos or GIFs become the animated cover; tall or square is detected from the picture. You can drop several at once." /></div>
       <input #picker type="file" class="hidden" multiple accept="image/*,video/*,.mp4,.m4v,.mov,.webm,.mkv,.gif" (change)="onPick($any($event.target))" />
     </div>
 

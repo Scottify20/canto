@@ -2,9 +2,11 @@ import { ChangeDetectionStrategy, Component, OnDestroy, effect, computed, inject
 import { ApiService } from '../../core/api.service';
 import { LibraryStore } from '../../core/library.store';
 import { TAG_LABELS, Track } from '../../core/models';
-import { Icon } from '../../shared/icon';
+import { Icon, IconName } from '../../shared/icon';
 import { Modal } from '../../shared/modal';
 import { ZoomImage } from '../../shared/zoom-image';
+
+type Fx = 'apply' | 'skip' | 'later' | 'undo';
 
 interface Decision { id: number; apply: boolean; timer: ReturnType<typeof setTimeout>; }
 
@@ -30,8 +32,23 @@ const THRESHOLD = 90;
           <span class="sm:hidden">Swipe right to apply, left to skip, clock = later</span>
         </div>
         <div class="relative select-none grow min-h-0">
+          @if (ghost(); as g) {
+            <div class="absolute inset-0 z-10 rounded-2xl border-2 pointer-events-none flex flex-col items-center justify-center gap-2 backdrop-blur-sm"
+              [class]="'swipe-out-' + g.kind + ' ' + tone(g.kind)">
+              <app-icon [name]="icon(g.kind)" [size]="44" />
+              <div class="font-extrabold tracking-wide">{{ label(g.kind) }}</div>
+              <div class="text-xs opacity-80 max-w-[80%] truncate">{{ g.title }}</div>
+            </div>
+          }
+          @if (stamp(); as t) {
+            <div class="absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none swipe-stamp rounded-full px-3 py-1 text-xs font-bold flex items-center gap-1 glass-strong" [class]="tone(t.kind)">
+              <app-icon [name]="icon(t.kind)" [size]="14" /> {{ label(t.kind) }}
+            </div>
+          }
+          @for (k of [c.track.id]; track k) {
           <div
             class="relative h-full rounded-2xl border border-base-content/15 bg-base-100/90 shadow-xl cursor-grab active:cursor-grabbing [touch-action:pan-y]"
+            [class]="enter() ? 'swipe-in-' + enter() : ''"
             [style.transform]="transform()"
             [style.transition]="dragging() ? 'none' : 'transform .25s ease'"
             (pointerdown)="down($event)" (pointermove)="move($event)" (pointerup)="up($event)" (pointercancel)="cancel()"
@@ -75,6 +92,7 @@ const THRESHOLD = 90;
             </ul>
             </div>
           </div>
+          }
         </div>
         <div class="flex justify-center gap-4 pt-3 shrink-0">
           <button class="btn btn-circle btn-lg btn-outline btn-error" aria-label="Skip" (click)="decide(false)"><app-icon name="x" [size]="24" /></button>
@@ -110,6 +128,10 @@ export class SwipeReviewModal implements OnDestroy {
   private inflight = signal<readonly number[]>([]);
   big = signal(false);
   dx = signal(0);
+  ghost = signal<{ kind: Fx; title: string } | null>(null);
+  stamp = signal<{ kind: Fx; n: number } | null>(null);
+  enter = signal<'' | 'right' | 'left' | 'up'>('');
+  private fxTimer?: ReturnType<typeof setTimeout>;
   dragging = signal(false);
   private startX = 0;
 
@@ -180,9 +202,23 @@ export class SwipeReviewModal implements OnDestroy {
     if (Math.abs(d) >= THRESHOLD) this.decide(d > 0);
   }
 
+  icon = (k: Fx): IconName => ({ apply: 'check', skip: 'x', later: 'clock', undo: 'undo' } as const)[k];
+  label = (k: Fx) => ({ apply: 'Applied', skip: 'Skipped', later: 'Later', undo: 'Undone' })[k];
+  tone = (k: Fx) => ({ apply: 'border-success text-success bg-success/15', skip: 'border-error text-error bg-error/15', later: 'border-info text-info bg-info/15', undo: 'border-warning text-warning bg-warning/15' })[k];
+
+  /** Brief feedback: the card that just left flies out stamped with the outcome, and the next card eases in. */
+  private feedback(kind: Fx, title: string, enter: '' | 'right' | 'left' | 'up', showGhost = true) {
+    clearTimeout(this.fxTimer);
+    this.ghost.set(showGhost ? { kind, title } : null);
+    this.stamp.set({ kind, n: Date.now() });
+    this.enter.set(enter);
+    this.fxTimer = setTimeout(() => { this.ghost.set(null); this.stamp.set(null); this.enter.set(''); }, 650);
+  }
+
   decide(apply: boolean) {
     const id = this.queue()[0];
     if (id === undefined) return;
+    this.feedback(apply ? 'apply' : 'skip', this.current()?.track.title ?? '', 'up');
     this.big.set(false);
     const timer = setTimeout(() => this.commit(id), UNDO_MS);
     this.stack.update((s) => [...s, { id, apply, timer }]);
@@ -192,6 +228,7 @@ export class SwipeReviewModal implements OnDestroy {
     const id = this.queue()[0];
     if (id === undefined || this.queue().length < 2) return;
     this.big.set(false);
+    this.feedback('later', this.current()?.track.title ?? '', 'up');
     this.order.update((o) => [...o.filter((x) => x !== id), id]);
   }
 
@@ -200,6 +237,7 @@ export class SwipeReviewModal implements OnDestroy {
     if (!last) return;
     clearTimeout(last.timer);
     this.stack.update((s) => s.slice(0, -1));
+    this.feedback('undo', '', last.apply ? 'right' : 'left', false);
   }
 
   private commit(id: number) {
@@ -212,6 +250,7 @@ export class SwipeReviewModal implements OnDestroy {
   }
 
   ngOnDestroy() {
+    clearTimeout(this.fxTimer);
     for (const d of [...this.stack()]) { clearTimeout(d.timer); this.commit(d.id); }
   }
 }

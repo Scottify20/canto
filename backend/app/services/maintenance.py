@@ -110,14 +110,14 @@ class MaintenanceService:
         return done
 
     def fix_channel_counts(self) -> int:
-        """Correct library entries imported while E-AC-3 in MP4 was misread as stereo (database only)."""
+        """Correct library entries whose surround layout was misread as stereo or mono (database only)."""
         fixed = 0
         for item in self.engine.lib.items():
             path = item_path(item)
             if (item.get("channels") or 2) > 2 or not os.path.exists(path):
                 continue
             channels = channel_count(path, item.get("channels"))
-            if channels > 2:
+            if channels != (item.get("channels") or 2):
                 item.channels = channels
                 item.store()
                 fixed += 1

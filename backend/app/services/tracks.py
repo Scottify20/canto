@@ -203,9 +203,7 @@ class TrackService:
             beets_util.prune_dirs(directory, root=root)
 
     def route_multichannel(self, items: list) -> int:
-        """Move multi-channel files into the multi-channel library root (when one is configured)."""
-        if not self.engine.settings.multichannel_path.strip():
-            return 0
+        """Move multi-channel files to where the structure puts them (own root and/or the [5.1] album suffix)."""
         moved = 0
         for item in items:
             item = self.lib.get_item(item.id)

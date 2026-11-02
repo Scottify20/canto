@@ -16,25 +16,28 @@ import { CoverPickerModal } from './cover-picker-modal';
   template: `
     <div class="flex flex-col gap-4">
       <div class="grid sm:grid-cols-[14rem_1fr] gap-4 items-start">
-        <div>
-          <div class="text-xs font-semibold mb-1">Current cover</div>
+        <section class="flex flex-col gap-2 max-sm:items-center">
+          <div class="text-xs font-semibold self-start">Static cover (embedded in the audio file)</div>
           @if (info()?.has) {
-            <img class="w-56 max-w-full aspect-square object-cover rounded-xl shadow-lg bg-base-300" [src]="api.coverUrl(track().id, 600, version())" alt="Current cover" />
-            <div class="text-xs opacity-70 mt-1">{{ info()!.width }}×{{ info()!.height }} · {{ bytes(info()!.bytes ?? 0) }} · {{ info()!.mime }}</div>
+            <img class="w-56 max-w-full aspect-square object-cover rounded-xl shadow-lg bg-base-300" [src]="api.coverUrl(track().id, 600, version())" alt="Current static cover" />
+            <div class="text-xs opacity-70 self-start">{{ info()!.width }}×{{ info()!.height }} · {{ bytes(info()!.bytes ?? 0) }} · {{ info()!.mime }}</div>
           } @else {
             <div class="w-56 max-w-full aspect-square rounded-xl bg-base-300/60 grid place-items-center text-sm opacity-70"><div class="text-center"><app-icon name="disc" [size]="36" /><div>No embedded cover</div></div></div>
           }
-        </div>
-
-        <div class="flex flex-col gap-3 min-w-0">
-          <app-cover-dropzone [trackId]="track().id" (changed)="refresh()" />
-          <div class="flex flex-wrap gap-2">
-            <button class="btn btn-sm btn-outline" [disabled]="!track().exists" (click)="picking.set(true)">
-              <app-icon name="search" /> Find online
+          <div class="grid grid-cols-2 gap-2 w-56 max-w-full">
+            <button class="btn btn-sm btn-outline px-2" [disabled]="!track().exists" (click)="picking.set(true)" title="Search online for a static album cover">
+              <app-icon name="search" /> Find
             </button>
-            <button class="btn btn-sm btn-ghost text-error" [disabled]="!info()?.has" (click)="remove()"><app-icon name="trash" /> Remove cover</button>
+            <button class="btn btn-sm btn-ghost text-error px-2" [disabled]="!info()?.has" (click)="remove()" title="Remove the embedded static cover (animated covers are kept)">
+              <app-icon name="trash" /> Remove
+            </button>
           </div>
-        </div>
+        </section>
+
+        <section class="flex flex-col gap-2 min-w-0">
+          <div class="text-xs font-semibold">Add or replace covers (static or animated)</div>
+          <app-cover-dropzone [trackId]="track().id" (changed)="refresh()" />
+        </section>
       </div>
 
       @if (picking()) {

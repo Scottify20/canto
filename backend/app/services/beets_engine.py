@@ -76,7 +76,7 @@ def with_fallbacks(structure: str) -> str:
     if "%if" in structure:
         return structure
     structure = re.sub(r"\$albumartist(?![A-Za-z_])", "%if{$albumartist,$albumartist,$artist}", structure)
-    return re.sub(r"\$album(?![A-Za-z_])", "%if{$album,$album,Singles}", structure)
+    return re.sub(r"\$album(?![A-Za-z_])", "%if{$album,$album,Singles}$surround", structure)
 
 
 class BeetsEngine:

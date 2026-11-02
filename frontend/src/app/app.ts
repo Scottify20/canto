@@ -1,6 +1,6 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
-import { ApiService } from './core/api.service';
+import { ApiService, isNativeAndroid } from './core/api.service';
 import { InboxStore } from './core/inbox.store';
 import { JobStore } from './core/job.store';
 import { LibraryStore } from './core/library.store';
@@ -57,6 +57,21 @@ type Dialog = 'sources' | 'structure' | 'maintenance' | 'duplicates' | 'swipe' |
             <div role="tablist" class="tabs tabs-box tabs-sm p-1 shrink-0"><ng-container *ngTemplateOutlet="tabsTpl" /></div>
             <div class="items-center gap-2 max-xl:hidden xl:flex"><ng-container *ngTemplateOutlet="statsTpl; context: { compact: true }" /></div>
           </div>
+          <div navStats class="dropdown dropdown-end xl:hidden">
+            <button tabindex="0" class="btn btn-sm btn-ghost gap-1.5 whitespace-nowrap" aria-label="Library statistics">
+              <app-icon name="library" [size]="15" />
+              <span class="font-bold tabular-nums">{{ lib.stats().total }}</span><span class="text-xs opacity-70">tracks</span>
+              <app-icon name="down" [size]="12" class="opacity-60" />
+            </button>
+            <div tabindex="0" class="dropdown-content glass-strong rounded-box z-40 w-56 p-3 mt-2 shadow-xl">
+              <div class="font-semibold text-sm mb-2">Library statistics</div>
+              <ul class="flex flex-col gap-1 text-sm">
+                @for (st of statCards(); track st.label) {
+                  <li class="flex justify-between"><span class="opacity-70">{{ st.label }}</span><span class="font-bold tabular-nums">{{ st.value }}</span></li>
+                }
+              </ul>
+            </div>
+          </div>
         </app-navbar>
       }
 
@@ -81,9 +96,6 @@ type Dialog = 'sources' | 'structure' | 'maintenance' | 'duplicates' | 'swipe' |
           @if (view() === 'inbox') {
             <app-inbox-panel />
           } @else {
-            @if (!maximized()) {
-              <div class="grid grid-cols-4 gap-2 text-center anim-fade shrink-0 xl:hidden"><ng-container *ngTemplateOutlet="statsTpl; context: { compact: false }" /></div>
-            }
             <app-library-toolbar class="shrink-0" [maximized]="maximized()" (maximizeToggle)="maximized.set(!maximized())" (duplicates)="dialog.set('duplicates')" (swipe)="dialog.set('swipe')" (remove)="startRemove($event)" />
             <app-library-table (open)="edit.set($event)" (remove)="removeIds.set([$event])" />
           }
@@ -113,6 +125,7 @@ export class App implements OnInit {
   inbox = inject(InboxStore);
 
   online = signal(false);
+  private promptedConnect = false;
   checks = signal<SystemCheck[]>([]);
   maximized = signal(false);
 
@@ -137,6 +150,9 @@ export class App implements OnInit {
   };
 
   async ngOnInit() {
+    // First launch of the phone app: nothing to talk to until it has scanned the computer's QR code.
+    if (!this.promptedConnect && isNativeAndroid && !localStorage.getItem('canto.serverUrl')) this.dialog.set('remote');
+    this.promptedConnect = true;
     await this.checkBackend();
     if (!this.online()) {
       setTimeout(() => this.ngOnInit(), 3000);

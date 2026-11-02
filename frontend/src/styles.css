@@ -180,6 +180,7 @@ body {
   .anim-fade,
   .anim-pop,
   .anim-slide,
+  .swipe-in-up, .swipe-in-left, .swipe-in-right,
   .anim-toast {
     animation: none;
   }
@@ -242,3 +243,40 @@ braccato-lyrics {
   padding-top: var(--sat);
   padding-bottom: var(--sab);
 }
+
+/* Tooltips are rendered by shared/tooltip-host.ts in the top layer; hide daisyUI's clipped pseudo-element ones. */
+.tooltip::before, .tooltip::after { display: none !important; }
+.floating-tip, .floating-tip-box {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  max-width: min(20rem, calc(100vw - 1rem));
+  padding: 0.4rem 0.65rem;
+  border-radius: 0.6rem;
+  font-size: 0.75rem;
+  line-height: 1.3;
+  color: var(--color-base-content);
+  background-color: color-mix(in oklab, var(--color-base-100) 96%, transparent);
+  border: 1px solid color-mix(in oklab, var(--color-base-content) 18%, transparent);
+  box-shadow: 0 8px 24px -8px rgb(0 0 0 / 0.45);
+  pointer-events: none;
+  overflow: visible;
+  width: max-content;
+}
+.dropdown-content { max-width: calc(100vw - 1rem); z-index: 60; }
+
+/* Swipe review feedback: the card that left flies out with its outcome; the next one eases in. */
+@keyframes swipe-out-right { to { transform: translateX(120%) rotate(14deg); opacity: 0; } }
+@keyframes swipe-out-left { to { transform: translateX(-120%) rotate(-14deg); opacity: 0; } }
+@keyframes swipe-out-down { to { transform: translateY(40%) scale(0.9); opacity: 0; } }
+@keyframes swipe-in-up { from { transform: translateY(14px) scale(0.96); opacity: 0.4; } }
+@keyframes swipe-in-right { from { transform: translateX(60%) rotate(8deg); opacity: 0; } }
+@keyframes swipe-in-left { from { transform: translateX(-60%) rotate(-8deg); opacity: 0; } }
+@keyframes swipe-stamp { 0% { transform: translate(-50%, -6px) scale(0.8); opacity: 0; } 20% { transform: translate(-50%, 0) scale(1); opacity: 1; } 75% { opacity: 1; } 100% { transform: translate(-50%, 0); opacity: 0; } }
+.swipe-out-apply { animation: swipe-out-right 0.5s cubic-bezier(0.4, 0, 0.8, 0.6) forwards; }
+.swipe-out-skip { animation: swipe-out-left 0.5s cubic-bezier(0.4, 0, 0.8, 0.6) forwards; }
+.swipe-out-later { animation: swipe-out-down 0.45s ease-in forwards; }
+.swipe-in-up { animation: swipe-in-up 0.3s ease-out; }
+.swipe-in-right { animation: swipe-in-right 0.35s ease-out; }
+.swipe-in-left { animation: swipe-in-left 0.35s ease-out; }
+.swipe-stamp { animation: swipe-stamp 0.65s ease-out forwards; }

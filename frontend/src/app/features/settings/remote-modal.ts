@@ -5,6 +5,7 @@ import { API_BASE, ApiService, PIN_KEY, errorMessage, isNativeAndroid } from '..
 import { RemoteInfo } from '../../core/models';
 import { ToastService } from '../../core/toast.service';
 import { Icon } from '../../shared/icon';
+import { InfoTip } from '../../shared/info-tip';
 import { Modal } from '../../shared/modal';
 
 const SERVER_KEY = 'canto.serverUrl';
@@ -12,28 +13,18 @@ const SERVER_KEY = 'canto.serverUrl';
 /** Share this computer's backend address as a QR code, or (in the Android app) scan one to connect. */
 @Component({
   selector: 'app-remote-modal',
-  imports: [Modal, Icon],
+  imports: [InfoTip, Modal, Icon],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-modal title="Remote control" icon="phone" widthClass="max-w-xl" (closed)="closed.emit()">
+    <app-modal [title]="android ? 'Connect to your computer' : 'Share with your phone'" icon="phone" widthClass="max-w-xl" (closed)="closed.emit()">
       <div class="flex flex-col gap-4">
-        @if (android) {
-          <div role="tablist" class="tabs tabs-box tabs-sm self-start">
-            <button role="tab" class="tab gap-2" [class.tab-active]="tab() === 'scan'" (click)="setTab('scan')"><app-icon name="scan-qr" [size]="14" /> Scan QR</button>
-            <button role="tab" class="tab gap-2" [class.tab-active]="tab() === 'share'" (click)="setTab('share')"><app-icon name="qr" [size]="14" /> Share</button>
-          </div>
-        }
-
         @if (tab() === 'share') {
-          <p class="text-sm opacity-80">
-            Scan this code with the Canto app on your phone to control this library remotely. Both devices must be on the same Wi-Fi network.
-          </p>
+          <p class="text-sm opacity-80">Scan the code with Canto on your phone <app-info-tip text="Controls this library remotely. Both devices must be on the same Wi-Fi network." /></p>
           @if (info(); as i) {
             <label class="flex items-center gap-3 rounded-lg bg-base-content/5 p-3 cursor-pointer">
               <input type="checkbox" class="toggle toggle-primary" [checked]="i.sharing" [disabled]="toggling()" (change)="setSharing($any($event.target).checked)" />
               <span class="grow">
-                <span class="font-semibold block">Share with other devices</span>
-                <span class="text-xs opacity-70">Opens port {{ i.port }} on your network until you switch it off or close Canto. The app on this computer keeps working either way.</span>
+                <span class="font-semibold block">Share with other devices <app-info-tip text="Opens port {{ i.port }} on your network until you switch it off or close Canto. The app on this computer keeps working either way." /></span>
               </span>
               @if (toggling()) { <span class="loading loading-spinner loading-sm"></span> }
             </label>
@@ -62,7 +53,7 @@ const SERVER_KEY = 'canto.serverUrl';
                 }
                 <button class="btn btn-sm btn-ghost" (click)="copy()"><app-icon name="copy" /> Copy address</button>
               </div>
-              <p class="text-xs opacity-60">Several addresses? Pick the one on your Wi-Fi (usually <code>192.168.…</code>). Devices need the PIN, which changes every time sharing is switched on, but traffic is not encrypted, so share only on a network you trust. Inside WSL or a VM, use the host machine's address and forward port {{ i.port }}.</p>
+              <p class="text-xs opacity-60 flex items-center gap-1">Several addresses? <app-info-tip>Pick the one on your Wi-Fi (usually <code>192.168.…</code>). Devices need the PIN, which changes every time sharing is switched on, but traffic is not encrypted, so share only on a network you trust. Inside WSL or a VM, use the host machine's address and forward port {{ i.port }}.</app-info-tip></p>
             } @else if (i.sharing) {
               <div class="alert alert-error alert-soft text-sm"><app-icon name="no" /> No network address found. Connect to Wi-Fi or a LAN first.</div>
             }
@@ -73,7 +64,7 @@ const SERVER_KEY = 'canto.serverUrl';
           }
         } @else {
           <p class="text-sm opacity-80">
-            On your computer open <b>Settings → Remote control</b> and point the camera at the QR code. Canto remembers the address.
+            On your computer click the status indicator in the top bar, choose <b>Share with phone</b>, then point the camera at the QR code. Canto remembers the address.
           </p>
           <div class="relative rounded-xl overflow-hidden bg-black aspect-square max-w-sm w-full mx-auto">
             <video #video class="w-full h-full object-cover" playsinline muted></video>

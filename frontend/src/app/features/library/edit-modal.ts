@@ -4,6 +4,7 @@ import { LibraryStore } from '../../core/library.store';
 import { Track, TrackDetails } from '../../core/models';
 import { ToastService } from '../../core/toast.service';
 import { Icon } from '../../shared/icon';
+import { InfoTip } from '../../shared/info-tip';
 import { Modal } from '../../shared/modal';
 import { EditCoverTab } from './edit-cover-tab';
 import { EditLyricsTab } from './edit-lyrics-tab';
@@ -13,7 +14,7 @@ export type EditTab = 'meta' | 'lyrics' | 'cover';
 
 @Component({
   selector: 'app-edit-modal',
-  imports: [Modal, Icon, EditMetaTab, EditLyricsTab, EditCoverTab],
+  imports: [InfoTip, Modal, Icon, EditMetaTab, EditLyricsTab, EditCoverTab],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-modal [title]="track().title || 'Edit track'" icon="edit" widthClass="max-w-4xl w-full" (closed)="closed.emit()">
@@ -37,6 +38,7 @@ export type EditTab = 'meta' | 'lyrics' | 'cover';
       <ng-container actions>
         <span class="text-xs opacity-60 grow self-center truncate max-sm:hidden" [title]="current().path">{{ current().path }}</span>
         @if (tab() === 'meta' && metaTab(); as m) {
+          <app-info-tip class="self-center" text="Saving writes the tags into the audio file and moves it if the folder structure now points elsewhere (lyrics files follow)." />
           <button class="btn btn-ghost" [disabled]="!m.dirty()" (click)="m.reset()">Reset</button>
           <button class="btn btn-primary" [disabled]="!m.dirty() || m.saving() || !current().exists" (click)="m.save()">
             @if (m.saving()) { <span class="loading loading-spinner loading-xs"></span> } @else { <app-icon name="save" /> } Save metadata

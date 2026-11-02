@@ -5,6 +5,7 @@ import { MaintenanceScan } from '../../core/models';
 import { ToastService } from '../../core/toast.service';
 import { formatBytes } from '../../shared/format';
 import { Icon } from '../../shared/icon';
+import { InfoTip } from '../../shared/info-tip';
 import { Modal } from '../../shared/modal';
 
 const ORDER = ['missing', 'tmp', 'empty_dirs', 'orphans', 'db_backups', 'http_cache'] as const;
@@ -19,14 +20,11 @@ const TIPS: Record<string, string> = {
 
 @Component({
   selector: 'app-maintenance-modal',
-  imports: [Modal, Icon],
+  imports: [InfoTip, Modal, Icon],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-modal title="Cleanup & maintenance" icon="clean" widthClass="max-w-2xl" (closed)="closed.emit()">
-      <p class="text-sm opacity-80 mb-3">
-        Canto already removes temporary files whenever the engine starts or stops. Use this window for everything else.
-        Nothing is deleted until you tick it and press <b>Clean selected</b>.
-      </p>
+      <p class="text-sm opacity-80 mb-3">Tick what to clean, then press <b>Clean selected</b>. <app-info-tip text="Canto already removes temporary files whenever the engine starts or stops. Use this window for everything else. Nothing is deleted until you tick it and press Clean selected." /></p>
       @if (scan(); as sc) {
         <ul class="flex flex-col gap-2">
           @for (key of order; track key) {

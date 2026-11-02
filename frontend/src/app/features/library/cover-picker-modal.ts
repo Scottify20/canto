@@ -12,7 +12,7 @@ import { ZoomImage } from '../../shared/zoom-image';
   imports: [Modal, Icon, ZoomImage],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-modal title="Find album cover" icon="search" widthClass="max-w-3xl" (closed)="closed.emit()">
+    <app-modal title="Find static album cover" icon="search" widthClass="max-w-3xl" (closed)="closed.emit()">
       @if (searching()) {
         <div class="p-10 text-center"><span class="loading loading-spinner loading-lg"></span><div class="mt-2 text-sm opacity-70">Searching cover sources…</div></div>
       } @else {

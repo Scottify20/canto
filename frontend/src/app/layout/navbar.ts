@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
+import { isNativeAndroid } from '../core/api.service';
 import { SystemCheck } from '../core/models';
 import { SettingsStore } from '../core/settings.store';
 import { Icon } from '../shared/icon';
@@ -17,13 +18,14 @@ import { Icon } from '../shared/icon';
         </div>
         <div class="flex-1 min-w-0 flex justify-center"><ng-content select="[navCenter]" /></div>
 
+        <ng-content select="[navStats]" />
+
         <div class="dropdown dropdown-end">
           <button tabindex="0" class="btn btn-ghost btn-sm btn-circle tooltip tooltip-bottom" data-tip="Settings" aria-label="Settings"><app-icon name="settings" /></button>
           <div tabindex="0" class="dropdown-content glass-strong rounded-box z-40 w-72 max-w-[calc(100vw-1rem)] p-3 mt-2 shadow-xl">
             <ul class="menu p-0 w-full">
               <li><button (click)="structure.emit(); close($event)"><app-icon name="structure" /> Folder structure</button></li>
               <li><button (click)="sources.emit(); close($event)"><app-icon name="globe" /> Sources &amp; API keys</button></li>
-              <li><button (click)="remote.emit(); close($event)"><app-icon name="qr" /> Remote control (QR)</button></li>
               <li><button (click)="maintenance.emit(); close($event)"><app-icon name="clean" /> Cleanup</button></li>
               <li><button (click)="s.theme.set(s.theme() === 'dark' ? 'light' : 'dark')"><app-icon [name]="s.theme() === 'dark' ? 'sun' : 'moon'" /> {{ s.theme() === 'dark' ? 'Switch to light theme' : 'Switch to dark theme' }}</button></li>
             </ul>
@@ -40,11 +42,16 @@ import { Icon } from '../shared/icon';
         <div class="dropdown dropdown-end">
           <button tabindex="0" class="btn btn-ghost btn-sm gap-2" aria-label="System status">
             <span class="status" [class.status-success]="online()" [class.status-error]="!online()"></span>
-            <span class="max-sm:hidden">{{ online() ? 'Online' : 'Offline' }}</span>
+            <span class="max-sm:hidden">{{ online() ? (android ? 'Connected' : 'Online') : (android ? 'Not connected' : 'Offline') }}</span>
           </button>
           <div tabindex="0" class="dropdown-content glass-strong rounded-box z-40 w-72 p-3 mt-2 shadow-xl">
             <div class="font-semibold mb-2">Engine tools</div>
-            @if (!online()) { <p class="text-sm text-error">The backend is not reachable. Start it on port 8010.</p> }
+            @if (!online()) {
+              <p class="text-sm text-error mb-2">{{ android ? 'Not connected to your computer.' : 'The backend is not reachable. Start it on port 8010.' }}</p>
+            }
+            <button class="btn btn-sm w-full mb-3" [class]="online() && android ? 'btn-ghost' : 'btn-primary btn-soft'" (click)="remote.emit(); close($event)">
+              <app-icon [name]="android ? 'scan-qr' : 'qr'" /> {{ android ? (online() ? 'Change computer / rescan QR' : 'Connect to computer') : 'Share with phone (QR)' }}
+            </button>
             <ul class="text-sm flex flex-col gap-1">
               @for (c of checks(); track c.name) {
                 <li class="flex items-start gap-2">
@@ -61,6 +68,7 @@ import { Icon } from '../shared/icon';
 })
 export class Navbar {
   s = inject(SettingsStore);
+  android = isNativeAndroid;
   online = input(false);
   checks = input<SystemCheck[]>([]);
   structure = output<void>();

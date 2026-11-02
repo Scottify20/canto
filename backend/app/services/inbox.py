@@ -209,6 +209,15 @@ class InboxService:
         """Normalize lyric sidecars and guarantee analysis/artwork after import."""
         if not items:
             return
+        # The import runs in a separate beets process that stores mutagen's channel count (stereo for E-AC-3), so re-probe.
+        for item in items:
+            item = self.engine.lib.get_item(item.id)
+            path = item_path(item) if item else ""
+            if item and os.path.exists(path):
+                channels = channel_count(path, item.get("channels"))
+                if channels != (item.get("channels") or 2):
+                    item.channels = channels
+                    item.store()
         moved = self.tracks.route_multichannel(items)
         if moved:
             job.write(f"[Multi-channel] {moved} surround/Atmos track(s) filed in the multi-channel folder")

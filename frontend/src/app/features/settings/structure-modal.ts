@@ -3,6 +3,7 @@ import { ApiService } from '../../core/api.service';
 import { StructurePreview } from '../../core/models';
 import { SettingsStore } from '../../core/settings.store';
 import { Icon } from '../../shared/icon';
+import { InfoTip } from '../../shared/info-tip';
 import { Modal } from '../../shared/modal';
 import { PathField } from '../import/path-field';
 
@@ -19,7 +20,7 @@ const VARIABLES = ['$albumartist', '$artist', '$album', '$title', '$track', '$di
 
 @Component({
   selector: 'app-structure-modal',
-  imports: [Modal, Icon, PathField],
+  imports: [Modal, Icon, PathField, InfoTip],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-modal title="Library folder structure" icon="structure" widthClass="max-w-3xl" (closed)="closed.emit()">
@@ -65,15 +66,10 @@ const VARIABLES = ['$albumartist', '$artist', '$album', '$title', '$track', '$di
 
         <div class="rounded-lg bg-base-content/5 p-3 flex flex-col gap-3">
           <div>
-            <div class="font-semibold text-sm flex items-center gap-2"><app-icon name="layers" [size]="16" class="text-primary" /> Surround &amp; Atmos (5.1 / 7.1 / multi-channel)</div>
-            <p class="text-xs opacity-70 mt-1">
-              Multi-channel mixes are never treated as duplicates of the stereo version. Give them their own library folder (leave empty to keep them next to stereo songs),
-              and nudge their ReplayGain so they play as loud as stereo music.
-            </p>
+            <div class="font-semibold text-sm flex items-center gap-2"><app-icon name="layers" [size]="16" class="text-primary" /> Surround &amp; Atmos (5.1 / 7.1 / multi-channel) <app-info-tip text="Multi-channel mixes are never treated as duplicates of the stereo version. Give them their own library folder (leave empty to keep them next to stereo songs; their album folder then gets a [5.1] suffix). Their loudness offset lives in the Enrich panel under Analysis options." /></div>
           </div>
           <app-path-field label="Multi-channel output folder" placeholder="/path/to/music-surround" hint="Uses the same folder structure as above."
             [value]="multichannelPath()" (valueChange)="multichannelPath.set($event)" />
-          <p class="text-xs opacity-60">The surround loudness offset now lives in the Enrich panel under <b>Analysis options</b>.</p>
         </div>
 
         <div class="collapse collapse-arrow bg-base-content/5 rounded-lg">

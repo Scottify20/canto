@@ -128,7 +128,6 @@ const GROUPS: { title: string; fields: FieldDef[] }[] = [
         <input type="checkbox" class="checkbox checkbox-sm" [disabled]="disabled()" [checked]="!!values()['comp']" (change)="set('comp', $any($event.target).checked)" />
         Part of a compilation
       </label>
-      <p class="text-xs opacity-60">Saving writes the tags into the audio file and moves it if the folder structure now points elsewhere (lyrics files follow).</p>
     </div>
   `,
 })
