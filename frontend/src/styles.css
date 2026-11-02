@@ -280,3 +280,10 @@ braccato-lyrics {
 .swipe-in-right { animation: swipe-in-right 0.35s ease-out; }
 .swipe-in-left { animation: swipe-in-left 0.35s ease-out; }
 .swipe-stamp { animation: swipe-stamp 0.65s ease-out forwards; }
+
+.remote-cta-gfx { position: relative; display: grid; place-items: center; width: 2.5rem; height: 2.5rem; flex: none; border-radius: .6rem; background: color-mix(in oklab, currentColor 18%, transparent); overflow: visible; }
+.remote-ring { position: absolute; inset: 0; border-radius: .6rem; border: 2px solid currentColor; opacity: 0; animation: remote-ping 1.6s ease-out infinite; }
+.remote-scan { position: absolute; left: .3rem; right: .3rem; height: 2px; border-radius: 2px; background: currentColor; box-shadow: 0 0 6px currentColor; animation: remote-scan 1.8s ease-in-out infinite; }
+@keyframes remote-ping { 0% { transform: scale(1); opacity: .6; } 100% { transform: scale(1.7); opacity: 0; } }
+@keyframes remote-scan { 0%, 100% { top: .3rem; } 50% { top: calc(100% - .35rem); } }
+@media (prefers-reduced-motion: reduce) { .remote-ring, .remote-scan { animation: none; } .remote-ring { display: none; } }
