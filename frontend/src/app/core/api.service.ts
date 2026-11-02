@@ -121,6 +121,9 @@ export class ApiService {
   details(id: number) {
     return this.get<TrackDetails>(`/tracks/${id}/details`);
   }
+  measureTag(id: number, part: 'gain' | 'key' | 'bpm') {
+    return this.post<{ values: Record<string, string | number>; engine: string }>('/analyze/measure', { id, part });
+  }
   match(id: number) {
     return this.post<{ candidates: MatchCandidate[] }>('/match', { id }).then((r) => r.candidates);
   }

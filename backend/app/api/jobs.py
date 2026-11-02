@@ -55,6 +55,40 @@ def start_analysis(body: IdsRequest):
     return _start("analyze", lambda job: analysis.run_analysis(job, deps.engine.lib, body.ids, body.force))
 
 
+class MeasureRequest(BaseModel):
+    id: int
+    part: str  # gain | key | bpm
+
+
+@router.post("/analyze/measure")
+def measure_tag(body: MeasureRequest):
+    """Analyses one track for one kind of tag and returns the values without saving them (the editor fills the fields; the user saves)."""
+    import os
+
+    item = deps.engine.lib.get_item(body.id)
+    if not item:
+        raise HTTPException(404, "Track not found")
+    path = os.fsdecode(item.path)
+    if not os.path.exists(path):
+        raise HTTPException(404, "Audio file is missing on disk")
+    try:
+        if body.part == "gain":
+            values, engine = analysis.replaygain_values(path, item.get("channels") or 2)
+        elif body.part == "key":
+            key, engine = analysis.detect_key(path, item.length or 0)
+            values = {"initial_key": key}
+        elif body.part == "bpm":
+            bpm, engine = analysis.detect_bpm(path, item.length or 0)
+            values = {"bpm": bpm}
+        else:
+            raise HTTPException(400, "Unknown analysis")
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(500, f"Analysis failed: {exc}")
+    return {"values": values, "engine": engine}
+
+
 @router.post("/covers")
 def start_covers(body: IdsRequest):
     return _start("covers", lambda job: deps.tracks.fetch_missing_covers(job, body.ids, body.force))

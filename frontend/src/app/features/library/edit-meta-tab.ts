@@ -4,6 +4,7 @@ import { LibraryStore } from '../../core/library.store';
 import { TrackDetails } from '../../core/models';
 import { ToastService } from '../../core/toast.service';
 import { Icon } from '../../shared/icon';
+import { KeyPicker } from '../../shared/key-picker';
 
 interface FieldDef {
   key: string;
@@ -11,6 +12,7 @@ interface FieldDef {
   tip?: string;
   type?: 'text' | 'number' | 'decimal';
   span?: 2;
+  analyse?: 'gain' | 'key' | 'bpm';
 }
 
 const GROUPS: { title: string; fields: FieldDef[] }[] = [
@@ -36,7 +38,7 @@ const GROUPS: { title: string; fields: FieldDef[] }[] = [
       { key: 'tracktotal', label: 'Track total', type: 'number' },
       { key: 'disc', label: 'Disc #', type: 'number' },
       { key: 'disctotal', label: 'Disc total', type: 'number' },
-      { key: 'bpm', label: 'BPM', type: 'number' },
+      { analyse: 'bpm', key: 'bpm', label: 'BPM', type: 'number' },
       { key: 'original_year', label: 'Original year', type: 'number' },
       { key: 'original_month', label: 'Original month', type: 'number' },
       { key: 'original_day', label: 'Original day', type: 'number' },
@@ -45,7 +47,7 @@ const GROUPS: { title: string; fields: FieldDef[] }[] = [
   {
     title: 'Loudness (ReplayGain)',
     fields: [
-      { key: 'rg_track_gain', label: 'Track gain (dB)', type: 'decimal', tip: 'Adjustment players apply so tracks sound equally loud, e.g. -7.25' },
+      { analyse: 'gain', key: 'rg_track_gain', label: 'Track gain (dB)', type: 'decimal', tip: 'Adjustment players apply so tracks sound equally loud, e.g. -7.25' },
       { key: 'rg_track_peak', label: 'Track peak', type: 'decimal', tip: 'Highest sample level, 1.0 = full scale' },
       { key: 'rg_album_gain', label: 'Album gain (dB)', type: 'decimal' },
       { key: 'rg_album_peak', label: 'Album peak', type: 'decimal' },
@@ -64,7 +66,7 @@ const GROUPS: { title: string; fields: FieldDef[] }[] = [
       { key: 'catalognum', label: 'Catalogue no.' },
       { key: 'isrc', label: 'ISRC' },
       { key: 'language', label: 'Language' },
-      { key: 'initial_key', label: 'Musical key', tip: 'e.g. Am, C#, F#m' },
+      { analyse: 'key', key: 'initial_key', label: 'Musical key', tip: 'e.g. Am, C#, F#m' },
       { key: 'comments', label: 'Comments', span: 2 },
       { key: 'composer_sort', label: 'Composer sort' },
       { key: 'artist_sort', label: 'Artist sort' },
@@ -103,7 +105,7 @@ const GROUPS: { title: string; fields: FieldDef[] }[] = [
 
 @Component({
   selector: 'app-edit-meta-tab',
-  imports: [Icon],
+  imports: [Icon, KeyPicker],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="flex flex-col gap-4">
@@ -116,9 +118,18 @@ const GROUPS: { title: string; fields: FieldDef[] }[] = [
                 <span class="font-medium flex items-center gap-1">
                   {{ f.label }}
                   @if (f.tip) { <span class="tooltip" [attr.data-tip]="f.tip"><app-icon name="help" [size]="12" class="opacity-60" /></span> }
+                  @if (f.analyse) {
+                    <button type="button" class="btn btn-ghost btn-xs btn-square h-5 min-h-0 w-5 tooltip" [attr.data-tip]="analysing() === f.analyse ? 'Analysing…' : 'Re-analyse from the audio'" [disabled]="disabled() || !!analysing()" (click)="analyse(f.analyse)" aria-label="Re-analyse">
+                      <span class="inline-flex origin-center" [class.animate-spin]="analysing() === f.analyse"><app-icon name="refresh" [size]="12" /></span>
+                    </button>
+                  }
                   @if (isChanged(f.key)) { <span class="badge badge-warning badge-xs">edited</span> }
                 </span>
+                @if (f.key === 'initial_key') {
+                  <app-key-picker [value]="'' + (values()[f.key] ?? '')" [disabled]="disabled()" (changed)="set(f.key, $event)" />
+                } @else {
                 <input class="input input-sm input-bordered w-full"  [type]="f.type === 'number' ? 'number' : 'text'" [attr.inputmode]="f.type === 'decimal' ? 'decimal' : null" [disabled]="disabled()" [value]="values()[f.key] ?? ''" (input)="set(f.key, $any($event.target).value)" />
+                }
               </label>
             }
           </div>
@@ -143,6 +154,7 @@ export class EditMetaTab implements OnChanges {
   groups = GROUPS;
   values = signal<Record<string, string | boolean>>({});
   saving = signal(false);
+  analysing = signal<string | null>(null);
 
   ngOnChanges() {
     this.reset();
@@ -164,6 +176,20 @@ export class EditMetaTab implements OnChanges {
   }
   dirty() {
     return Object.keys(this.changes()).length > 0;
+  }
+
+  /** Measures the audio again and fills the fields; nothing is written until Save */
+  async analyse(part: 'gain' | 'key' | 'bpm') {
+    this.analysing.set(part);
+    try {
+      const r = await this.api.measureTag(this.details().track.id, part);
+      this.values.update((v) => ({ ...v, ...Object.fromEntries(Object.entries(r.values).map(([k, x]) => [k, String(x)])) }));
+      this.toast.success(`Analysed (${r.engine}) — press Save to keep it`);
+    } catch (e) {
+      this.toast.error(errorMessage(e));
+    } finally {
+      this.analysing.set(null);
+    }
   }
 
   async save() {
