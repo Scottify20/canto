@@ -7,7 +7,7 @@ import {
   LucideHeadphones, LucideImage, LucideInbox, LucideInfo, LucideKeyRound, LucideLayers, LucideLibrary, LucideLink,
   LucideListFilter, LucideMaximize2, LucideMenu, LucideMicVocal, LucideMinimize2, LucideMoon, LucidePencil, LucidePlus,
   LucideRefreshCw, LucideSave, LucideScanSearch, LucideSearch, LucideSettings, LucideShieldCheck, LucideSparkles,
-  LucideSun, LucideTrash, LucideTriangleAlert, LucideUndo2, LucideUpload, LucideWandSparkles, LucideWrench, LucideX,
+  LucideSun, LucideTrash, LucideTriangleAlert, LucideUndo2, LucideClock, LucideUpload, LucideWandSparkles, LucideWrench, LucideX, LucideZoomIn, LucideGlobe, LucideSlidersHorizontal, LucideFilm, LucideQrCode, LucideScanQrCode, LucideSmartphone,
 } from '@lucide/angular';
 
 const ICONS = {
@@ -23,8 +23,9 @@ const ICONS = {
   'minimize': LucideMinimize2, 'moon': LucideMoon, 'edit': LucidePencil, 'plus': LucidePlus, 'refresh': LucideRefreshCw,
   'save': LucideSave, 'scan': LucideScanSearch, 'search': LucideSearch, 'settings': LucideSettings,
   'shield': LucideShieldCheck, 'sparkles': LucideSparkles, 'sun': LucideSun, 'trash': LucideTrash,
-  'warn': LucideTriangleAlert, 'undo': LucideUndo2, 'upload': LucideUpload, 'wand': LucideWandSparkles,
-  'wrench': LucideWrench, 'x': LucideX,
+  'warn': LucideTriangleAlert, 'undo': LucideUndo2, 'clock': LucideClock, 'upload': LucideUpload, 'wand': LucideWandSparkles,
+  'wrench': LucideWrench, 'x': LucideX, 'zoom': LucideZoomIn, 'globe': LucideGlobe, 'sliders': LucideSlidersHorizontal,
+  'film': LucideFilm, 'qr': LucideQrCode, 'scan-qr': LucideScanQrCode, 'phone': LucideSmartphone,
 };
 
 export type IconName = keyof typeof ICONS;

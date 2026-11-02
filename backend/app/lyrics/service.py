@@ -23,6 +23,7 @@ MAX_DURATION_DELTA = 6.0  # seconds
 class LyricsOptions:
     overwrite_lrc: bool = False
     overwrite_ttml: bool = False
+    embed: bool = False  # also write the plain lyrics into the audio tags whenever LRC is saved
 
 
 class LyricsService:
@@ -146,7 +147,27 @@ class LyricsService:
         os.remove(ttml_path)
         return None
 
+    @staticmethod
+    def _embed_plain(item, content: str) -> None:
+        plain = "\n".join(re.sub(r"\[[^\]]*\]|<[^>]*>", "", row).strip() for row in content.splitlines())
+        item.lyrics = plain.strip()
+        item.try_write()
+        item.store()
+
+    def _embed_file(self, item, lrc_path: str) -> None:
+        try:
+            with open(lrc_path, encoding="utf-8") as handle:
+                self._embed_plain(item, handle.read())
+        except OSError:
+            pass
+
     def process_item(self, item, opts: LyricsOptions) -> dict:
+        result = self._process_item(item, opts)
+        if opts.embed and result.get("lrc") and os.path.exists(item_path(item)):
+            self._embed_file(item, f"{sidecar_base(item)}.lrc")
+        return result
+
+    def _process_item(self, item, opts: LyricsOptions) -> dict:
         base = sidecar_base(item)
         lrc_path, ttml_path = f"{base}.lrc", f"{base}.ttml"
         had_lrc = os.path.exists(lrc_path)
@@ -301,8 +322,5 @@ class LyricsService:
         self._normalize_existing_ttml(item, f"{base}.lrc", f"{base}.ttml")
         self._write(f"{base}.{saved_kind}", content)
         if embed and saved_kind == "lrc":
-            plain = "\n".join(re.sub(r"\[[^\]]*\]|<[^>]*>", "", row).strip() for row in content.splitlines())
-            item.lyrics = plain.strip()
-            item.try_write()
-            item.store()
+            self._embed_plain(item, content)
         return saved_kind

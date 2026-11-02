@@ -1,26 +1,14 @@
 import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
 import { JobStore } from '../../core/job.store';
 import { LibraryStore } from '../../core/library.store';
-import { COLUMNS, LibraryFilter } from '../../core/models';
+import { COLUMNS } from '../../core/models';
 import { SettingsStore } from '../../core/settings.store';
+import { FilterMenu } from './filter-menu';
 import { Icon } from '../../shared/icon';
-
-const FILTERS: { value: LibraryFilter; label: string }[] = [
-  { value: 'all', label: 'All tracks' },
-  { value: 'no-lyrics', label: 'Missing any lyrics' },
-  { value: 'no-lrc', label: 'Missing LRC' },
-  { value: 'no-ttml', label: 'Missing TTML' },
-  { value: 'no-cover', label: 'No cover art' },
-  { value: 'no-key', label: 'No musical key' },
-  { value: 'no-gain', label: 'No ReplayGain' },
-  { value: 'duplicates', label: 'Duplicates' },
-  { value: 'missing', label: 'File missing on disk' },
-  { value: 'review', label: 'Awaiting review' },
-];
 
 @Component({
   selector: 'app-library-toolbar',
-  imports: [Icon],
+  imports: [Icon, FilterMenu],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="flex flex-col gap-2">
@@ -30,9 +18,7 @@ const FILTERS: { value: LibraryFilter; label: string }[] = [
           <input type="search" class="grow" placeholder="Search title, artist, album, path…" [value]="lib.search()" (input)="lib.setSearch($any($event.target).value)" aria-label="Search library" />
         </label>
 
-        <select class="select select-sm w-auto bg-base-100/70" aria-label="Filter" [value]="lib.filter()" (change)="lib.setFilter($any($event.target).value)">
-          @for (f of filters; track f.value) { <option [value]="f.value" [selected]="f.value === lib.filter()">{{ f.label }}</option> }
-        </select>
+        <app-filter-menu />
 
         <div class="dropdown">
           <button tabindex="0" class="btn btn-sm btn-ghost tooltip tooltip-bottom" data-tip="Choose columns"><app-icon name="columns" /><span class="max-sm:hidden">Columns</span></button>
@@ -66,9 +52,15 @@ const FILTERS: { value: LibraryFilter; label: string }[] = [
           <app-icon name="save" /> Apply all ({{ lib.pendingCount() }})
         </button>
 
+        @if (lib.pendingCount()) {
+          <button class="btn btn-sm btn-primary tooltip tooltip-bottom" data-tip="Review proposed changes one by one (swipe on phones)" (click)="swipe.emit()">
+            <app-icon name="sparkles" /> Swipe review
+          </button>
+        }
         <span class="grow"></span>
         @if (lib.selected().size) {
-          <span class="text-sm opacity-80">{{ lib.selected().size }} selected</span>
+          <span class="text-sm opacity-80 tooltip tooltip-bottom max-sm:hidden" data-tip="Shift+click: select a range · Ctrl+click: add or remove one · Ctrl+A: select all shown">{{ lib.selected().size }} selected</span>
+          <span class="text-sm opacity-80 sm:hidden">{{ lib.selected().size }} selected</span>
           <button class="btn btn-xs btn-ghost" (click)="lib.clearSelection()">Deselect</button>
         } @else if (lib.filtered().length) {
           <button class="btn btn-xs btn-ghost" (click)="lib.selectAllFiltered()">Select all {{ lib.filtered().length }}</button>
@@ -101,7 +93,7 @@ export class LibraryToolbar {
   maximized = input(false);
   maximizeToggle = output<void>();
   duplicates = output<void>();
+  swipe = output<void>();
   remove = output<'selected' | 'all'>();
-  filters = FILTERS;
   columns = COLUMNS;
 }

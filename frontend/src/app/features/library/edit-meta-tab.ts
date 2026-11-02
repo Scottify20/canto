@@ -9,7 +9,7 @@ interface FieldDef {
   key: string;
   label: string;
   tip?: string;
-  type?: 'text' | 'number';
+  type?: 'text' | 'number' | 'decimal';
   span?: 2;
 }
 
@@ -37,6 +37,20 @@ const GROUPS: { title: string; fields: FieldDef[] }[] = [
       { key: 'disc', label: 'Disc #', type: 'number' },
       { key: 'disctotal', label: 'Disc total', type: 'number' },
       { key: 'bpm', label: 'BPM', type: 'number' },
+      { key: 'original_year', label: 'Original year', type: 'number' },
+      { key: 'original_month', label: 'Original month', type: 'number' },
+      { key: 'original_day', label: 'Original day', type: 'number' },
+    ],
+  },
+  {
+    title: 'Loudness (ReplayGain)',
+    fields: [
+      { key: 'rg_track_gain', label: 'Track gain (dB)', type: 'decimal', tip: 'Adjustment players apply so tracks sound equally loud, e.g. -7.25' },
+      { key: 'rg_track_peak', label: 'Track peak', type: 'decimal', tip: 'Highest sample level, 1.0 = full scale' },
+      { key: 'rg_album_gain', label: 'Album gain (dB)', type: 'decimal' },
+      { key: 'rg_album_peak', label: 'Album peak', type: 'decimal' },
+      { key: 'r128_track_gain', label: 'R128 track gain', type: 'decimal', tip: 'Opus-style gain (Q7.8 fixed point)' },
+      { key: 'r128_album_gain', label: 'R128 album gain', type: 'decimal' },
     ],
   },
   {
@@ -52,6 +66,37 @@ const GROUPS: { title: string; fields: FieldDef[] }[] = [
       { key: 'language', label: 'Language' },
       { key: 'initial_key', label: 'Musical key', tip: 'e.g. Am, C#, F#m' },
       { key: 'comments', label: 'Comments', span: 2 },
+      { key: 'composer_sort', label: 'Composer sort' },
+      { key: 'artist_sort', label: 'Artist sort' },
+      { key: 'albumartist_sort', label: 'Album artist sort' },
+      { key: 'artist_credit', label: 'Artist credit' },
+      { key: 'albumartist_credit', label: 'Album artist credit' },
+    ],
+  },
+  {
+    title: 'Release details',
+    fields: [
+      { key: 'albumtype', label: 'Album type', tip: 'e.g. album, single, ep' },
+      { key: 'albumdisambig', label: 'Album disambiguation' },
+      { key: 'media', label: 'Media', tip: 'e.g. CD, Digital Media' },
+      { key: 'disctitle', label: 'Disc title' },
+      { key: 'country', label: 'Country' },
+      { key: 'script', label: 'Script' },
+      { key: 'barcode', label: 'Barcode' },
+      { key: 'asin', label: 'ASIN' },
+      { key: 'copyright', label: 'Copyright', span: 2 },
+      { key: 'url', label: 'URL', span: 2 },
+      { key: 'encoder', label: 'Encoder' },
+    ],
+  },
+  {
+    title: 'MusicBrainz IDs',
+    fields: [
+      { key: 'mb_trackid', label: 'Recording / track ID', span: 2 },
+      { key: 'mb_albumid', label: 'Release ID', span: 2 },
+      { key: 'mb_artistid', label: 'Artist ID', span: 2 },
+      { key: 'mb_albumartistid', label: 'Album artist ID', span: 2 },
+      { key: 'mb_releasegroupid', label: 'Release group ID', span: 2 },
     ],
   },
 ];
@@ -73,7 +118,7 @@ const GROUPS: { title: string; fields: FieldDef[] }[] = [
                   @if (f.tip) { <span class="tooltip" [attr.data-tip]="f.tip"><app-icon name="help" [size]="12" class="opacity-60" /></span> }
                   @if (isChanged(f.key)) { <span class="badge badge-warning badge-xs">edited</span> }
                 </span>
-                <input class="input input-sm input-bordered w-full" [type]="f.type ?? 'text'" [disabled]="disabled()" [value]="values()[f.key] ?? ''" (input)="set(f.key, $any($event.target).value)" />
+                <input class="input input-sm input-bordered w-full"  [type]="f.type === 'number' ? 'number' : 'text'" [attr.inputmode]="f.type === 'decimal' ? 'decimal' : null" [disabled]="disabled()" [value]="values()[f.key] ?? ''" (input)="set(f.key, $any($event.target).value)" />
               </label>
             }
           </div>
@@ -83,12 +128,6 @@ const GROUPS: { title: string; fields: FieldDef[] }[] = [
         <input type="checkbox" class="checkbox checkbox-sm" [disabled]="disabled()" [checked]="!!values()['comp']" (change)="set('comp', $any($event.target).checked)" />
         Part of a compilation
       </label>
-      <div class="flex gap-2 justify-end">
-        <button class="btn btn-sm btn-ghost" [disabled]="!dirty()" (click)="reset()">Reset</button>
-        <button class="btn btn-sm btn-primary" [disabled]="!dirty() || saving() || disabled()" (click)="save()">
-          @if (saving()) { <span class="loading loading-spinner loading-xs"></span> } @else { <app-icon name="save" /> } Save metadata
-        </button>
-      </div>
       <p class="text-xs opacity-60">Saving writes the tags into the audio file and moves it if the folder structure now points elsewhere (lyrics files follow).</p>
     </div>
   `,

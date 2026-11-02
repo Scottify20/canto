@@ -5,18 +5,23 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 
 from beets import util as beets_util
+from beets.util import MoveOperation
 from PIL import Image
 
-from . import covers
+from . import animated, covers
 from .beets_engine import BeetsEngine
 
-TEXT_FIELDS = ["title", "artist", "albumartist", "album", "subtitle", "grouping", "comments", "label", "catalognum", "isrc", "language", "initial_key"]
+TEXT_FIELDS = ["title", "artist", "albumartist", "album", "subtitle", "grouping", "comments", "label", "catalognum", "isrc", "language", "initial_key",
+               "artist_sort", "albumartist_sort", "composer_sort", "albumtype", "albumdisambig", "media", "disctitle", "copyright", "country", "barcode", "asin", "url",
+               "script", "artist_credit", "albumartist_credit", "mb_trackid", "mb_albumid", "mb_artistid", "mb_albumartistid", "mb_releasegroupid", "encoder"]
 LIST_FIELDS = ["genres", "composers", "lyricists", "arrangers", "remixers"]
-INT_FIELDS = ["year", "month", "day", "track", "tracktotal", "disc", "disctotal", "bpm"]
-EDITABLE_FIELDS = set(TEXT_FIELDS + LIST_FIELDS + INT_FIELDS + ["genre", "comp"])
+INT_FIELDS = ["year", "month", "day", "track", "tracktotal", "disc", "disctotal", "bpm", "original_year", "original_month", "original_day"]
+FLOAT_FIELDS = ["rg_track_gain", "rg_track_peak", "rg_album_gain", "rg_album_peak", "r128_track_gain", "r128_album_gain"]
+EDITABLE_FIELDS = set(TEXT_FIELDS + LIST_FIELDS + INT_FIELDS + FLOAT_FIELDS + ["genre", "comp"])
 PROVENANCE_FIELDS = {"mb_trackid", "mb_albumid", "mb_artistid", "mb_albumartistid"}
 SIDECAR_EXTS = (".lrc", ".ttml", ".txt")
 DUP_TOLERANCE = 3.0  # seconds
+ANIMATED_PREFIX = "animated-cover-"  # animated-cover-square.mp4 / animated-cover-tall.mp4
 
 
 def item_path(item) -> str:
@@ -27,11 +32,12 @@ def sidecar_base(item) -> str:
     return os.path.splitext(item_path(item))[0]
 
 
-def dup_key(artist: str, title: str) -> str:
+def dup_key(artist: str, title: str, channels: int = 2) -> str:
+    """Identity of a song. Multi-channel mixes (5.1/Atmos) are distinct from their stereo versions."""
     from ..lyrics.text import primary_artist
 
     squash = lambda v: re.sub(r"[^\w]+", "", (v or "").casefold())  # noqa: E731
-    return f"{squash(primary_artist(artist))}|{squash(title)}"
+    return f"{squash(primary_artist(artist))}|{squash(title)}|{'mc' if (channels or 0) > 2 else 'st'}"
 
 
 def cluster_duplicates(rows: list[dict]) -> list[list[dict]]:
@@ -91,6 +97,7 @@ class TrackService:
         siblings = dir_cache[directory]
         stem = os.path.splitext(name)[0]
         exists = name in siblings
+        animated = sorted(e[len(ANIMATED_PREFIX):].split(".")[0] for e in siblings if e.startswith(ANIMATED_PREFIX))
         return {
             "id": item.id,
             "title": item.title,
@@ -103,6 +110,10 @@ class TrackService:
             "length": round(item.length or 0, 1),
             "format": item.format,
             "bitrate": item.bitrate,
+            "channels": item.get("channels") or 2,
+            "added": round(item.get("added") or 0),
+            "animated": animated,
+            "bpm": item.get("bpm") or "",
             "rg_track_gain": item.get("rg_track_gain", ""),
             "initial_key": item.get("initial_key", ""),
             "path": path,
@@ -126,7 +137,7 @@ class TrackService:
 
     @staticmethod
     def _dup_rows(rows: list[dict]) -> list[dict]:
-        return [{"key": dup_key(r["artist"], r["title"]), "length": r["length"], "row": r, **r} for r in rows]
+        return [{"key": dup_key(r["artist"], r["title"], r["channels"]), "length": r["length"], "row": r, **r} for r in rows]
 
     def get_track(self, item_id: int) -> dict | None:
         item = self.lib.get_item(item_id)
@@ -144,6 +155,9 @@ class TrackService:
         for key in TEXT_FIELDS + INT_FIELDS:
             value = item.get(key)
             values[key] = "" if value in (None, 0) else value
+        for key in FLOAT_FIELDS:
+            value = item.get(key)
+            values[key] = "" if value in (None, "") else round(float(value), 4)
         for key in LIST_FIELDS:
             values[key] = ", ".join(item.get(key) or [])
         values["comp"] = bool(item.get("comp"))
@@ -164,6 +178,11 @@ class TrackService:
                 setattr(item, key, [g.strip() for g in re.split(r"[;,/]", str(value)) if g.strip()])
             elif key in INT_FIELDS:
                 setattr(item, key, int(value) if str(value).strip().isdigit() else 0)
+            elif key in FLOAT_FIELDS:
+                try:
+                    setattr(item, key, float(str(value).strip()))
+                except ValueError:
+                    setattr(item, key, None)
             elif key == "comp":
                 item.comp = bool(value)
             elif key in TEXT_FIELDS or key in PROVENANCE_FIELDS:
@@ -172,8 +191,34 @@ class TrackService:
         item.try_sync(write=True, move=True)
         new_dir = os.path.dirname(item_path(item))
         if new_dir != old_dir:
-            beets_util.prune_dirs(old_dir, root=self.lib.directory)
+            self._prune(old_dir)
         return self.get_track(item_id)
+
+    def _prune(self, directory: str) -> None:
+        """Remove emptied folders under the library root and the multi-channel root."""
+        roots = [self.lib.directory]
+        if self.engine.settings.multichannel_path.strip():
+            roots.append(os.fsencode(os.path.abspath(os.path.expanduser(self.engine.settings.multichannel_path))))
+        for root in roots:
+            beets_util.prune_dirs(directory, root=root)
+
+    def route_multichannel(self, items: list) -> int:
+        """Move multi-channel files into the multi-channel library root (when one is configured)."""
+        if not self.engine.settings.multichannel_path.strip():
+            return 0
+        moved = 0
+        for item in items:
+            item = self.lib.get_item(item.id)
+            if not item or (item.get("channels") or 0) <= 2 or not os.path.exists(item_path(item)):
+                continue
+            if os.path.normpath(os.fsdecode(item.destination())) == os.path.normpath(item_path(item)):
+                continue
+            old_dir = os.path.dirname(item_path(item))
+            item.move(MoveOperation.MOVE)
+            item.store()
+            self._prune(old_dir)
+            moved += 1
+        return moved
 
     @staticmethod
     def _reconcile_album(item, tags: dict) -> None:
@@ -219,7 +264,7 @@ class TrackService:
                         os.remove(side)
             item.remove(delete=delete_files, with_album=False)
             if delete_files:
-                beets_util.prune_dirs(os.path.dirname(path), root=self.lib.directory)
+                self._prune(os.path.dirname(path))
             removed += 1
         return removed
 
@@ -317,6 +362,39 @@ class TrackService:
             out = io.BytesIO()
             img.save(out, "JPEG", quality=82)
             return out.getvalue()
+
+    def audio_path(self, item_id: int) -> str | None:
+        item = self.lib.get_item(item_id)
+        if not item:
+            return None
+        path = item_path(item)
+        return path if os.path.isfile(path) else None
+
+    def _track_dir(self, item_id: int) -> str:
+        item = self.lib.get_item(item_id)
+        if not item or not os.path.isdir(os.path.dirname(item_path(item))):
+            raise LookupError("Track not found")
+        return os.path.dirname(item_path(item))
+
+    def animated_list(self, item_id: int) -> dict:
+        directory = self._track_dir(item_id)
+        out = {}
+        for kind in ("square", "tall"):
+            found = animated.find(directory, kind)
+            if found:
+                info = animated.probe(found) or {}
+                out[kind] = {"file": os.path.basename(found), "size": os.path.getsize(found), "width": info.get("width", 0), "height": info.get("height", 0)}
+        return out
+
+    def animated_set(self, item_id: int, source: str, ext: str, kind: str | None) -> dict:
+        kind = animated.store(self._track_dir(item_id), source, ext, kind)
+        return {"shape": kind, "animated": self.animated_list(item_id)}
+
+    def animated_path(self, item_id: int, kind: str) -> str | None:
+        return animated.find(self._track_dir(item_id), kind)
+
+    def animated_remove(self, item_id: int, kind: str) -> None:
+        animated.remove(self._track_dir(item_id), kind)
 
     def cover(self, item_id: int, size: int = 96) -> bytes | None:
         item = self.lib.get_item(item_id)

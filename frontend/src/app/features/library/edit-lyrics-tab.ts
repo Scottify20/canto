@@ -1,16 +1,24 @@
+import { SettingsStore } from '../../core/settings.store';
 import { ChangeDetectionStrategy, Component, OnInit, inject, input, signal } from '@angular/core';
 import { ApiService, errorMessage } from '../../core/api.service';
 import { LibraryStore } from '../../core/library.store';
 import { LyricsCandidate, LyricsContent, Track } from '../../core/models';
 import { ToastService } from '../../core/toast.service';
 import { Icon } from '../../shared/icon';
+import { isTtml } from '../../shared/lyrics-shift';
+import { LyricsPlayer } from './lyrics-player';
 
 type Kind = 'lrc' | 'ttml';
+
+/** The candidate's text for the selected tab, falling back to whichever format it has. */
+function kind_(c: LyricsCandidate, kind: Kind): string | null {
+  return kind === 'ttml' ? c.ttml || c.lrc : c.lrc || c.ttml;
+}
 
 /** Current lyrics + drag-and-drop import + online candidates with a side-by-side comparison. */
 @Component({
   selector: 'app-edit-lyrics-tab',
-  imports: [Icon],
+  imports: [Icon, LyricsPlayer],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="flex flex-col gap-4">
@@ -29,12 +37,6 @@ type Kind = 'lrc' | 'ttml';
         <input #picker type="file" class="hidden" accept=".lrc,.ttml,.xml,.txt" multiple (change)="onPick($any($event.target))" />
       </div>
 
-      <label class="flex items-center gap-2 text-sm cursor-pointer">
-        <input type="checkbox" class="checkbox checkbox-xs" [checked]="embed()" (change)="embed.set($any($event.target).checked)" />
-        Also embed plain lyrics in the audio file tags
-        <span class="tooltip" data-tip="Writes an unsynced copy into the file so players without .lrc support still show lyrics"><app-icon name="help" [size]="13" class="opacity-60" /></span>
-      </label>
-
       <section>
         <div class="flex items-center gap-2 mb-2">
           <div role="tablist" class="tabs tabs-border tabs-sm grow">
@@ -45,6 +47,9 @@ type Kind = 'lrc' | 'ttml';
         </div>
         @if (loading()) { <span class="loading loading-spinner loading-sm"></span> }
         @else {
+          @if (track().exists) {
+            <button class="btn btn-sm btn-primary gap-1 mb-2 shadow-md" [disabled]="!draft().trim()" (click)="previewKind.set(kind()); previewText.set(draft()); previewTitle.set(track().title); player.set(true)"><app-icon name="mic" [size]="14" /> Play with lyrics</button>
+          }
           <textarea class="textarea textarea-bordered w-full font-mono text-xs h-48" spellcheck="false" [placeholder]="'No ' + kind().toUpperCase() + ' lyrics yet – drop a file, paste here, or find some online.'" [value]="draft()" (input)="draft.set($any($event.target).value)"></textarea>
           <div class="flex flex-wrap gap-2 justify-end mt-2">
             <button class="btn btn-sm btn-ghost text-error" [disabled]="!currentText()" (click)="remove()"><app-icon name="trash" /> Delete {{ kind().toUpperCase() }}</button>
@@ -84,6 +89,7 @@ type Kind = 'lrc' | 'ttml';
                     </div>
                   </div>
                   <div class="flex flex-wrap gap-2 justify-end">
+                    <button class="btn btn-xs btn-ghost" (click)="previewCandidate(c)"><app-icon name="mic" [size]="12" /> Preview with song</button>
                     <button class="btn btn-xs btn-outline" (click)="save('lrc', c.lrc)">Use LRC</button>
                     @if (c.timing === 'word') {
                       <button class="btn btn-xs btn-outline" (click)="save('ttml', c.ttml)">Use TTML</button>
@@ -96,6 +102,9 @@ type Kind = 'lrc' | 'ttml';
           }
         </ul>
       </section>
+      @if (player()) {
+        @defer { <app-lyrics-player [trackId]="track().id" [title]="previewTitle()" [text]="previewText()" (closed)="player.set(false)" (saveTiming)="saveTiming($event)" /> }
+      }
     </div>
   `,
 })
@@ -103,13 +112,30 @@ export class EditLyricsTab implements OnInit {
   private api = inject(ApiService);
   private lib = inject(LibraryStore);
   private toast = inject(ToastService);
+  private settings = inject(SettingsStore);
 
   track = input.required<Track>();
 
   current = signal<LyricsContent | null>(null);
   kind = signal<Kind>('lrc');
   draft = signal('');
-  embed = signal(false);
+  player = signal(false);
+  previewText = signal('');
+  previewTitle = signal('');
+  previewKind = signal<Kind>('lrc');
+
+  async saveTiming(text: string) {
+    await this.save(this.previewKind(), text);
+    this.player.set(false);
+  }
+
+  previewCandidate(c: LyricsCandidate) {
+    const text = (kind_(c, this.kind()) ?? '').trim();
+    this.previewKind.set(isTtml(text) ? 'ttml' : 'lrc');
+    this.previewText.set(text);
+    this.previewTitle.set(`${c.source} · ${this.track().title}`);
+    this.player.set(true);
+  }
   over = signal(false);
   loading = signal(true);
   searching = signal(false);
@@ -151,7 +177,7 @@ export class EditLyricsTab implements OnInit {
   async save(kind: Kind, content: string) {
     if (!content.trim()) return;
     try {
-      const saved = await this.api.saveLyrics(this.track().id, kind, content, this.embed());
+      const saved = await this.api.saveLyrics(this.track().id, kind, content, this.settings.embedLyrics());
       const savedKind = saved.saved_kind;
       this.lib.patch(saved.track);
       await this.reload();

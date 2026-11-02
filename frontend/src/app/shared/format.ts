@@ -12,3 +12,11 @@ export function formatBytes(bytes: number): string {
   while (value >= 1024 && i < units.length - 1) { value /= 1024; i++; }
   return `${value.toFixed(value < 10 ? 1 : 0)} ${units[i]}`;
 }
+
+export function channelLayout(channels: number): string {
+  return { 1: 'Mono', 2: 'Stereo', 6: '5.1', 8: '7.1' }[channels] ?? `${channels}ch`;
+}
+
+export function formatDate(unixSeconds: number): string {
+  return unixSeconds ? new Date(unixSeconds * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+}

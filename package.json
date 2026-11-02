@@ -1,0 +1,23 @@
+{
+  "name": "canto",
+  "private": true,
+  "scripts": {
+    "setup": "node frontend/scripts/setup.js",
+    "setup:app": "node frontend/scripts/setup.js --skip-system",
+    "clean": "node frontend/scripts/clean.js",
+    "clean:all": "node frontend/scripts/clean.js --deps",
+    "phone:forward": "npm --prefix frontend run phone:forward",
+    "backend": "node frontend/scripts/backend.js",
+    "start": "npm --prefix frontend start",
+    "start:phone": "npm --prefix frontend run start:phone",
+    "build:linux:appimage": "npm --prefix frontend run build:linux:appimage",
+    "build:linux:deb": "npm --prefix frontend run build:linux:deb",
+    "setup:android": "npm --prefix frontend run setup:android",
+    "build:android:apk": "npm --prefix frontend run build:android:apk",
+    "build:android:aab": "npm --prefix frontend run build:android:aab",
+    "android:debug": "npm --prefix frontend run android:debug",
+    "android:open": "npm --prefix frontend run android:open",
+    "build:windows": "npm --prefix frontend run build:windows",
+    "build:android-and-windows": "npm run build:android:apk && npm run build:windows"
+  }
+}

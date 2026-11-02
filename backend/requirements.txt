@@ -11,4 +11,4 @@ mutagen
 numpy
 
 # Optional, improves accuracy: essentia (key detection). Install rsgain separately for faster ReplayGain.
-essentia
+essentia; sys_platform != "win32"

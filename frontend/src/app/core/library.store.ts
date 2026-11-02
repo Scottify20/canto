@@ -11,6 +11,9 @@ export function sameValue(a: unknown, b: unknown): boolean {
   return String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
 }
 
+/** Formats that keep every sample of the source */
+const LOSSLESS = /flac|alac|wav|aiff|ape|wavpack|wv|dsd|dsf|tta|pcm/i;
+
 @Injectable({ providedIn: 'root' })
 export class LibraryStore {
   private api = inject(ApiService);
@@ -43,6 +46,16 @@ export class LibraryStore {
         case 'no-lrc': return !t.has_lrc;
         case 'no-key': return !t.initial_key;
         case 'no-gain': return t.rg_track_gain === '';
+        case 'no-bpm': return !t.bpm;
+        case 'no-tags': return !t.album || !t.year || !t.genre || !t.albumartist;
+        case 'complete-lyrics': return t.has_lrc && t.has_ttml;
+        case 'surround': return t.channels > 2;
+        case 'stereo': return t.channels <= 2;
+        case 'animated': return t.animated.length > 0;
+        case 'no-animated': return t.animated.length === 0;
+        case 'lossless': return LOSSLESS.test(t.format);
+        case 'lossy': return !LOSSLESS.test(t.format);
+        case 'recent': return t.added * 1000 > Date.now() - 7 * 864e5;
         case 'no-cover': return !t.has_cover;
         case 'missing': return !t.exists;
         case 'duplicates': return t.dup_group !== null;
@@ -57,9 +70,11 @@ export class LibraryStore {
   });
 
   readonly pageCount = computed(() => Math.max(1, Math.ceil(this.filtered().length / this.settings.pageSize())));
+  /** Zero-based page index, always within [0, pageCount - 1]. */
+  readonly currentPage = computed(() => Math.max(0, Math.min(this.page(), this.pageCount() - 1)));
   readonly pageRows = computed(() => {
     const size = this.settings.pageSize();
-    const page = Math.min(this.page(), this.pageCount() - 1);
+    const page = this.currentPage();
     return this.filtered().slice(page * size, (page + 1) * size);
   });
   readonly pendingCount = computed(() => Object.keys(this.proposals()).length);
@@ -91,7 +106,7 @@ export class LibraryStore {
     const value = (t: Track): string | number => {
       switch (key) {
         case 'status': return Number(t.has_lrc) + Number(t.has_ttml) + Number(t.has_cover);
-        case 'year': case 'length': case 'rg_track_gain': return Number(t[key]) || 0;
+        case 'year': case 'length': case 'rg_track_gain': case 'added': case 'bitrate': case 'bpm': case 'track': return Number(t[key]) || 0;
         default: return String(t[key as keyof Track] ?? '').toLowerCase();
       }
     };
@@ -120,8 +135,27 @@ export class LibraryStore {
     if (this.sortKey() === key) this.sortDir.update((d) => (d === 1 ? -1 : 1));
     else { this.sortKey.set(key); this.sortDir.set(1); }
   }
+  /** Last row picked without Shift; Shift+click extends the selection from here. */
+  private anchor: number | null = null;
+
   toggleSelect(id: number) {
     this.selected.update((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    this.anchor = id;
+  }
+  /** Click handling shared by checkboxes and rows: Ctrl/Cmd toggles one row, Shift adds the range from the anchor. */
+  pick(id: number, mods: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }, on = !this.selected().has(id)) {
+    if (mods.shiftKey && this.anchor !== null) {
+      const order = this.filtered().map((t) => t.id);
+      const a = order.indexOf(this.anchor);
+      const b = order.indexOf(id);
+      if (a >= 0 && b >= 0) {
+        const range = order.slice(Math.min(a, b), Math.max(a, b) + 1);
+        this.selected.update((s) => { const n = new Set(s); for (const r of range) on ? n.add(r) : n.delete(r); return n; });
+        return;
+      }
+    }
+    this.selected.update((s) => { const n = new Set(s); on ? n.add(id) : n.delete(id); return n; });
+    this.anchor = id;
   }
   selectPage(on: boolean) {
     this.selected.update((s) => {
@@ -259,7 +293,7 @@ export class LibraryStore {
 
   // ---- lyrics ---------------------------------------------------------------------------
   private lyricsOptions() {
-    return { overwrite_lrc: this.settings.overwriteLrc(), overwrite_ttml: this.settings.overwriteTtml() };
+    return { overwrite_lrc: this.settings.overwriteLrc(), overwrite_ttml: this.settings.overwriteTtml(), embed: this.settings.embedLyrics() };
   }
 
   async fetchLyrics(track: Track) {
@@ -280,7 +314,7 @@ export class LibraryStore {
     return this.jobs.start(() => this.api.startLyrics(ids, this.lyricsOptions()));
   }
 
-  startAnalysis(ids: number[] | null, force = false) {
+  startAnalysis(ids: number[] | null, force = this.settings.reanalyze()) {
     return this.jobs.start(() => this.api.startAnalysis(ids, force));
   }
 

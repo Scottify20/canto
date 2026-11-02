@@ -4,6 +4,7 @@ import os
 
 from ..core import http as http_client
 from ..core.settings import BEETS_DIR
+from .audio import channel_count
 from .beets_engine import AUDIO_EXTENSIONS, BeetsEngine
 from .tracks import SIDECAR_EXTS, item_path
 
@@ -17,12 +18,17 @@ class MaintenanceService:
 
     def _roots(self) -> list[str]:
         s = self.engine.settings
-        return [p for p in {s.output_path, s.input_path} if p and os.path.isdir(p)]
+        return [p for p in {s.output_path, s.input_path, s.multichannel_path} if p and os.path.isdir(p)]
+
+    def _library_roots(self) -> list[str]:
+        s = self.engine.settings
+        return [p for p in dict.fromkeys([s.output_path, s.multichannel_path]) if p]
 
     def _tmp_files(self) -> list[str]:
         found = []
-        for base, _dirs, files in os.walk(self.engine.settings.output_path or "/nonexistent"):
-            found.extend(os.path.join(base, f) for f in files if f.endswith(".tmp"))
+        for root in self._library_roots():
+            for base, _dirs, files in os.walk(root):
+                found.extend(os.path.join(base, f) for f in files if f.endswith(".tmp"))
         return found
 
     def _empty_dirs(self) -> list[str]:
@@ -35,13 +41,13 @@ class MaintenanceService:
 
     def _orphans(self) -> list[str]:
         found = []
-        output = self.engine.settings.output_path
-        for base, _dirs, files in os.walk(output or "/nonexistent"):
-            stems = {os.path.splitext(f)[0] for f in files if os.path.splitext(f)[1].lower() in AUDIO_EXTENSIONS}
-            for f in files:
-                stem, ext = os.path.splitext(f)
-                if ext.lower() in SIDECAR_EXTS and stem not in stems and stem.rsplit(".", 1)[0] not in stems:
-                    found.append(os.path.join(base, f))
+        for root in self._library_roots():
+            for base, _dirs, files in os.walk(root):
+                stems = {os.path.splitext(f)[0] for f in files if os.path.splitext(f)[1].lower() in AUDIO_EXTENSIONS}
+                for f in files:
+                    stem, ext = os.path.splitext(f)
+                    if ext.lower() in SIDECAR_EXTS and stem not in stems and stem.rsplit(".", 1)[0] not in stems:
+                        found.append(os.path.join(base, f))
         return found
 
     @staticmethod
@@ -102,6 +108,20 @@ class MaintenanceService:
         self.tracks._thumbnail.cache_clear()
         self.tracks._art_cache.clear()
         return done
+
+    def fix_channel_counts(self) -> int:
+        """Correct library entries imported while E-AC-3 in MP4 was misread as stereo (database only)."""
+        fixed = 0
+        for item in self.engine.lib.items():
+            path = item_path(item)
+            if (item.get("channels") or 2) > 2 or not os.path.exists(path):
+                continue
+            channels = channel_count(path, item.get("channels"))
+            if channels > 2:
+                item.channels = channels
+                item.store()
+                fixed += 1
+        return fixed
 
     def quick_cleanup(self) -> None:
         """Cheap, always-safe cleanup run on startup and shutdown."""

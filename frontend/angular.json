@@ -44,14 +44,14 @@
                 "input": "public"
               }
             ],
-            "styles": ["src/styles.css"]
+            "styles": ["src/styles.css", "node_modules/@braccato/core/dist/styles/variables.css", "node_modules/@braccato/core/dist/styles/lyrics.css", "node_modules/@braccato/core/dist/styles/instrumental.css"]
           },
           "configurations": {
             "production": {
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "700kB",
+                  "maximumWarning": "750kB",
                   "maximumError": "1MB"
                 },
                 {

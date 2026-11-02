@@ -17,12 +17,14 @@ class LyricsBatchRequest(BaseModel):
     ids: list[int] | None = None  # None = whole library
     overwrite_lrc: bool = False
     overwrite_ttml: bool = False
+    embed: bool = False
 
 
 class LyricsTrackRequest(BaseModel):
     id: int
     overwrite_lrc: bool = False
     overwrite_ttml: bool = False
+    embed: bool = False
 
 
 class IdsRequest(BaseModel):
@@ -44,7 +46,7 @@ def start_import(body: ImportRequest):
 
 @router.post("/lyrics")
 def start_lyrics(body: LyricsBatchRequest):
-    opts = LyricsOptions(body.overwrite_lrc, body.overwrite_ttml)
+    opts = LyricsOptions(body.overwrite_lrc, body.overwrite_ttml, body.embed)
     return _start("lyrics", lambda job: deps.lyrics.run_batch(job, body.ids, opts))
 
 
@@ -61,7 +63,7 @@ def start_covers(body: IdsRequest):
 @router.post("/lyrics/track")
 def fetch_single_lyrics(body: LyricsTrackRequest):
     try:
-        result = deps.lyrics.process_single(body.id, LyricsOptions(body.overwrite_lrc, body.overwrite_ttml))
+        result = deps.lyrics.process_single(body.id, LyricsOptions(body.overwrite_lrc, body.overwrite_ttml, body.embed))
     except LookupError as exc:
         raise HTTPException(404, str(exc))
     return {"status": "success", "result": result, "track": deps.tracks.get_track(body.id)}

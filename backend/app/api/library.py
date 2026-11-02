@@ -27,6 +27,8 @@ class SettingsUpdate(BaseModel):
     delete_originals: bool | None = None
     duplicate_action: str | None = Field(None, pattern="^(skip|keep|replace)$")
     prune_empty_dirs: bool | None = None
+    multichannel_path: str | None = None
+    multichannel_gain_offset: float | None = Field(None, ge=-24, le=24)
     lyrics_order: list[str] | None = None
     providers: list[ProviderUpdate] | None = None
 
@@ -54,7 +56,8 @@ def settings_payload() -> dict:
     return {
         "input_path": s.input_path, "output_path": s.output_path, "folder_structure": s.folder_structure,
         "tolerance": s.tolerance, "delete_originals": s.delete_originals, "duplicate_action": s.duplicate_action,
-        "prune_empty_dirs": s.prune_empty_dirs, "has_discogs_token": bool(s.discogs_token),
+        "prune_empty_dirs": s.prune_empty_dirs, "multichannel_path": s.multichannel_path,
+        "multichannel_gain_offset": s.multichannel_gain_offset, "has_discogs_token": bool(s.discogs_token),
         "providers": deps.lyrics.provider_states(),
     }
 

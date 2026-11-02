@@ -10,6 +10,13 @@ export interface Track {
   length: number;
   format: string;
   bitrate: number;
+  /** Channel count: 1-2 stereo/mono, more = surround (5.1, 7.1, Atmos bed) */
+  channels: number;
+  /** Unix seconds when the track entered the library */
+  added: number;
+  /** Animated cover videos stored beside the track */
+  animated: ('square' | 'tall')[];
+  bpm: number | '';
   rg_track_gain: number | '';
   initial_key: string;
   path: string;
@@ -87,6 +94,8 @@ export interface Settings {
   delete_originals: boolean;
   duplicate_action: DuplicateAction;
   prune_empty_dirs: boolean;
+  multichannel_path: string;
+  multichannel_gain_offset: number;
   has_discogs_token: boolean;
   providers: ProviderState[];
 }
@@ -175,6 +184,8 @@ export interface InboxFile {
   length: number;
   format: string;
   bitrate: number;
+  channels: number;
+  animated: ('square' | 'tall')[];
   has_cover: boolean;
   corrupt: boolean;
   has_lrc: boolean;
@@ -194,6 +205,19 @@ export interface InboxScan {
 export interface DuplicateGroup {
   keep_id: number;
   tracks: Track[];
+}
+
+export type AnimatedCovers = Partial<Record<'square' | 'tall', { file: string; size: number; width: number; height: number }>>;
+
+export interface RemoteInfo {
+  /** Current sharing PIN; only sent to the computer running Canto */
+  pin: string | null;
+  /** Whether the backend is currently reachable from other devices */
+  sharing: boolean;
+  /** Whether sharing is switched on automatically when Canto starts */
+  auto_start: boolean;
+  port: number;
+  addresses: { ip: string; url: string }[];
 }
 
 export interface StructurePreview {
@@ -217,6 +241,11 @@ export type ColumnKey =
   | 'genre'
   | 'length'
   | 'format'
+  | 'bitrate'
+  | 'bpm'
+  | 'albumartist'
+  | 'track'
+  | 'added'
   | 'rg_track_gain'
   | 'initial_key'
   | 'status'
@@ -237,7 +266,12 @@ export const COLUMNS: ColumnDef[] = [
   { key: 'year', label: 'Year', tip: 'Release year', wide: true },
   { key: 'genre', label: 'Genre', tip: 'Genre', wide: true },
   { key: 'length', label: 'Length', tip: 'Duration', wide: true },
-  { key: 'format', label: 'Format', tip: 'Audio format', wide: true },
+  { key: 'format', label: 'Format', tip: 'Audio format and channel layout', wide: true },
+  { key: 'bitrate', label: 'Bitrate', tip: 'Average bitrate in kbps', wide: true },
+  { key: 'bpm', label: 'BPM', tip: 'Tempo in beats per minute', wide: true },
+  { key: 'albumartist', label: 'Album artist', tip: 'Album artist (used for the folder name)', wide: true },
+  { key: 'track', label: '#', tip: 'Track number', wide: true },
+  { key: 'added', label: 'Added', tip: 'When the song was imported into the library', wide: true },
   { key: 'rg_track_gain', label: 'Gain (dB)', tip: 'ReplayGain track gain', wide: true },
   { key: 'initial_key', label: 'Key', tip: 'Musical key' },
   { key: 'status', label: 'Status', tip: 'Cover art, lyrics and warnings' },
@@ -252,6 +286,16 @@ export type LibraryFilter =
   | 'no-cover'
   | 'no-key'
   | 'no-gain'
+  | 'no-bpm'
+  | 'no-tags'
+  | 'complete-lyrics'
+  | 'surround'
+  | 'stereo'
+  | 'animated'
+  | 'no-animated'
+  | 'lossless'
+  | 'lossy'
+  | 'recent'
   | 'missing'
   | 'duplicates'
   | 'review';

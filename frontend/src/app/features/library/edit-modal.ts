@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, inject, input, output, signal, viewChild } from '@angular/core';
 import { ApiService, errorMessage } from '../../core/api.service';
 import { LibraryStore } from '../../core/library.store';
 import { Track, TrackDetails } from '../../core/models';
@@ -29,14 +29,19 @@ export type EditTab = 'meta' | 'lyrics' | 'cover';
 
       <div class="anim-fade">
         @switch (tab()) {
-          @case ('meta') { @if (details(); as d) { <app-edit-meta-tab [details]="d" [disabled]="!current().exists" (saved)="onSaved($event)" /> } @else { <div class="p-8 text-center"><span class="loading loading-spinner"></span></div> } }
+          @case ('meta') { @if (details(); as d) { <app-edit-meta-tab #meta [details]="d" [disabled]="!current().exists" (saved)="onSaved($event)" /> } @else { <div class="p-8 text-center"><span class="loading loading-spinner"></span></div> } }
           @case ('lyrics') { <app-edit-lyrics-tab [track]="current()" /> }
           @case ('cover') { <app-edit-cover-tab [track]="current()" /> }
         }
       </div>
       <ng-container actions>
         <span class="text-xs opacity-60 grow self-center truncate max-sm:hidden" [title]="current().path">{{ current().path }}</span>
-        <button class="btn btn-primary" (click)="closed.emit()">Done</button>
+        @if (tab() === 'meta' && metaTab(); as m) {
+          <button class="btn btn-ghost" [disabled]="!m.dirty()" (click)="m.reset()">Reset</button>
+          <button class="btn btn-primary" [disabled]="!m.dirty() || m.saving() || !current().exists" (click)="m.save()">
+            @if (m.saving()) { <span class="loading loading-spinner loading-xs"></span> } @else { <app-icon name="save" /> } Save metadata
+          </button>
+        }
       </ng-container>
     </app-modal>
   `,
@@ -50,6 +55,7 @@ export class EditModal implements OnInit {
   initialTab = input<EditTab>('meta');
   closed = output<void>();
 
+  metaTab = viewChild(EditMetaTab);
   tab = signal<EditTab>('meta');
   details = signal<TrackDetails | null>(null);
   /** The live store copy so badges and the path update after saves. */

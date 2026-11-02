@@ -1,3 +1,4 @@
+import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDropList, moveItemInArray } from '@angular/cdk/drag-drop';
 import { ChangeDetectionStrategy, Component, OnInit, inject, output, signal } from '@angular/core';
 import { ProviderState } from '../../core/models';
 import { SettingsStore } from '../../core/settings.store';
@@ -10,19 +11,20 @@ interface Row extends ProviderState {
 
 @Component({
   selector: 'app-sources-modal',
-  imports: [Modal, Icon],
+  imports: [Modal, Icon, CdkDropList, CdkDrag, CdkDragHandle],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-modal title="Lyrics sources & metadata keys" icon="settings" widthClass="max-w-3xl" (closed)="closed.emit()">
       <p class="text-sm opacity-80 mb-3">
         Canto asks every enabled source for lyrics and keeps the best one: word-synced TTML first, then the most accurate line-synced LRC.
-        Sources higher in the list win ties. Use the arrows to change priority.
+        Sources higher in the list win ties. Drag the handle (or use the arrows) to change priority.
       </p>
 
-      <ul class="flex flex-col gap-2">
+      <ul class="flex flex-col gap-2" cdkDropList (cdkDropListDropped)="drop($event)">
         @for (p of rows(); track p.id; let i = $index) {
-          <li class="rounded-xl border border-base-content/10 bg-base-content/5 p-3 anim-slide">
+          <li cdkDrag class="rounded-xl border border-base-content/10 bg-base-100 p-3" cdkDragLockAxis="y">
             <div class="flex items-center gap-2">
+              <span cdkDragHandle class="cursor-grab active:cursor-grabbing touch-none opacity-60 hover:opacity-100 p-1" aria-label="Drag to reorder"><app-icon name="menu" [size]="16" /></span>
               <div class="flex flex-col">
                 <button class="btn btn-ghost btn-xs btn-square h-5 min-h-0" [disabled]="i === 0" (click)="move(i, -1)" aria-label="Move up"><app-icon name="up" [size]="14" /></button>
                 <button class="btn btn-ghost btn-xs btn-square h-5 min-h-0" [disabled]="i === rows().length - 1" (click)="move(i, 1)" aria-label="Move down"><app-icon name="down" [size]="14" /></button>
@@ -79,6 +81,13 @@ export class SourcesModal implements OnInit {
 
   hasKeys(p: Row) {
     return p.key_fields.every((k) => k.set || p.edits[k.id] || !k.secret);
+  }
+  drop(e: CdkDragDrop<Row[]>) {
+    this.rows.update((list) => {
+      const next = [...list];
+      moveItemInArray(next, e.previousIndex, e.currentIndex);
+      return next;
+    });
   }
   move(i: number, delta: number) {
     this.rows.update((list) => {

@@ -3,7 +3,7 @@ import { InboxStore } from '../../core/inbox.store';
 import { JobStore } from '../../core/job.store';
 import { InboxFile } from '../../core/models';
 import { SettingsStore } from '../../core/settings.store';
-import { formatDuration } from '../../shared/format';
+import { channelLayout, formatDuration } from '../../shared/format';
 import { Icon } from '../../shared/icon';
 
 /** Review what is waiting in the input folder before it enters the library. */
@@ -11,8 +11,9 @@ import { Icon } from '../../shared/icon';
   selector: 'app-inbox-panel',
   imports: [Icon],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { class: 'flex flex-col flex-1 min-h-0' },
   template: `
-    <section class="glass-panel anim-slide flex flex-col">
+    <section class="glass-panel anim-slide flex flex-col min-h-0 max-h-full">
       <div class="flex flex-wrap items-center gap-2 p-3 border-b border-base-content/10">
         <app-icon name="inbox" class="text-primary" />
         <div class="grow min-w-40">
@@ -41,7 +42,7 @@ import { Icon } from '../../shared/icon';
         </div>
         @if (scan.truncated) { <div class="px-3 pb-2 text-xs text-warning">Only the first files are shown (folder is very large).</div> }
 
-        <ul class="overflow-y-auto divide-y divide-base-content/10" style="max-height: calc(100vh - 22rem); min-height: 8rem">
+        <ul class="overflow-y-auto min-h-32 divide-y divide-base-content/10">
           @for (f of scan.files; track f.path) {
             <li class="flex items-center gap-3 px-3 py-2 hover:bg-base-content/5" [class.opacity-60]="f.status !== 'new'">
               <input type="checkbox" class="checkbox checkbox-sm" [checked]="inbox.selected().has(f.path)" [disabled]="f.corrupt" (change)="inbox.toggle(f)" [attr.aria-label]="'Select ' + f.title" />
@@ -54,6 +55,12 @@ import { Icon } from '../../shared/icon';
                 <span class="badge badge-sm" [class]="statusClass(f)">{{ statusLabel(f) }}</span>
                 @if (!f.corrupt) {
                   <span class="badge badge-sm badge-ghost max-sm:hidden">{{ f.format }}{{ f.length ? ' · ' + dur(f.length) : '' }}</span>
+                  @if (f.channels > 2) {
+                    <span class="badge badge-sm badge-secondary badge-soft tooltip" [attr.data-tip]="f.channels + ' channels: surround / Atmos mix, kept separate from stereo versions'">{{ layout(f.channels) }}</span>
+                  }
+                  @if (f.animated.length) {
+                    <span class="badge badge-sm badge-accent badge-soft tooltip gap-1" [attr.data-tip]="'Animated cover found in this folder (' + f.animated.join(' + ') + '); copied to the album on import'"><app-icon name="film" [size]="12" />{{ f.animated.join(' + ') }}</span>
+                  }
                   <span class="badge badge-sm tooltip" [class]="f.has_cover ? 'badge-success badge-soft' : 'badge-ghost'" [attr.data-tip]="f.has_cover ? 'Has embedded cover art' : 'No embedded cover art'"><app-icon name="image" [size]="12" /></span>
                   <span class="badge badge-sm tooltip" [class]="f.has_lrc ? 'badge-success badge-soft' : 'badge-ghost'" [attr.data-tip]="f.has_lrc ? 'Matching .lrc found next to the file' : 'No .lrc next to the file'">LRC</span>
                   <span class="badge badge-sm tooltip" [class]="f.has_ttml ? 'badge-success badge-soft' : 'badge-ghost'" [attr.data-tip]="f.has_ttml ? 'Matching .ttml found next to the file' : 'No .ttml next to the file'">TTML</span>
@@ -79,6 +86,7 @@ export class InboxPanel {
   s = inject(SettingsStore);
   dur = formatDuration;
 
+  layout = channelLayout;
   statusLabel(f: InboxFile) {
     return { new: 'New', in_library: 'In library', in_inbox: 'Duplicate', corrupt: 'Corrupt' }[f.status];
   }

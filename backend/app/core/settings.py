@@ -26,6 +26,10 @@ class Settings:
     delete_originals: bool = False  # move instead of copy on import
     duplicate_action: str = "skip"  # skip | keep | replace
     prune_empty_dirs: bool = True
+    # Multi-channel (5.1 / 7.1 / Atmos) files: optional separate library root, and a loudness offset
+    # applied on top of the stereo-downmix measurement so they sit level with stereo music.
+    multichannel_path: str = ""
+    multichannel_gain_offset: float = 0.0
     # Lyrics providers: id -> {"enabled": bool, "keys": {field: value}}; order = priority.
     lyrics_order: list = field(default_factory=list)
     lyrics_providers: dict = field(default_factory=dict)

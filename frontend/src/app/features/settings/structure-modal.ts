@@ -4,6 +4,7 @@ import { StructurePreview } from '../../core/models';
 import { SettingsStore } from '../../core/settings.store';
 import { Icon } from '../../shared/icon';
 import { Modal } from '../../shared/modal';
+import { PathField } from '../import/path-field';
 
 const PRESETS = [
   { name: 'Artist / Album / Title', value: '$albumartist/$album/$title', note: 'Classic and tidy.' },
@@ -18,7 +19,7 @@ const VARIABLES = ['$albumartist', '$artist', '$album', '$title', '$track', '$di
 
 @Component({
   selector: 'app-structure-modal',
-  imports: [Modal, Icon],
+  imports: [Modal, Icon, PathField],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-modal title="Library folder structure" icon="structure" widthClass="max-w-3xl" (closed)="closed.emit()">
@@ -62,6 +63,19 @@ const VARIABLES = ['$albumartist', '$artist', '$album', '$title', '$track', '$di
           </div>
         </div>
 
+        <div class="rounded-lg bg-base-content/5 p-3 flex flex-col gap-3">
+          <div>
+            <div class="font-semibold text-sm flex items-center gap-2"><app-icon name="layers" [size]="16" class="text-primary" /> Surround &amp; Atmos (5.1 / 7.1 / multi-channel)</div>
+            <p class="text-xs opacity-70 mt-1">
+              Multi-channel mixes are never treated as duplicates of the stereo version. Give them their own library folder (leave empty to keep them next to stereo songs),
+              and nudge their ReplayGain so they play as loud as stereo music.
+            </p>
+          </div>
+          <app-path-field label="Multi-channel output folder" placeholder="/path/to/music-surround" hint="Uses the same folder structure as above."
+            [value]="multichannelPath()" (valueChange)="multichannelPath.set($event)" />
+          <p class="text-xs opacity-60">The surround loudness offset now lives in the Enrich panel under <b>Analysis options</b>.</p>
+        </div>
+
         <div class="collapse collapse-arrow bg-base-content/5 rounded-lg">
           <input type="checkbox" />
           <div class="collapse-title text-sm font-semibold">Guide: tips &amp; advanced syntax</div>
@@ -76,7 +90,7 @@ const VARIABLES = ['$albumartist', '$artist', '$album', '$title', '$track', '$di
       </div>
       <ng-container actions>
         <button class="btn btn-ghost" (click)="closed.emit()">Cancel</button>
-        <button class="btn btn-primary" [disabled]="!template().trim() || !!error()" (click)="save()"><app-icon name="save" /> Save structure</button>
+        <button class="btn btn-primary" [disabled]="!template().trim() || !!error()" (click)="save()"><app-icon name="save" /> Save</button>
       </ng-container>
     </app-modal>
   `,
@@ -89,12 +103,14 @@ export class StructureModal implements OnInit {
   presets = PRESETS;
   variables = VARIABLES;
   template = signal('');
+  multichannelPath = signal('');
   preview = signal<StructurePreview | null>(null);
   error = signal('');
   private timer?: ReturnType<typeof setTimeout>;
 
   ngOnInit() {
     this.template.set(this.s.folderStructure());
+    this.multichannelPath.set(this.s.multichannelPath());
     void this.refresh();
   }
 
@@ -119,6 +135,6 @@ export class StructureModal implements OnInit {
   }
 
   async save() {
-    if (await this.s.save({ folder_structure: this.template().trim() }, true)) this.closed.emit();
+    if (await this.s.save({ folder_structure: this.template().trim(), multichannel_path: this.multichannelPath().trim() }, true)) this.closed.emit();
   }
 }

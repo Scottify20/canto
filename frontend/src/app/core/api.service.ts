@@ -2,6 +2,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import {
+  AnimatedCovers,
   CoverCandidate,
   CoverInfo,
   DuplicateGroup,
@@ -13,6 +14,7 @@ import {
   LyricsResult,
   MaintenanceScan,
   MatchCandidate,
+  RemoteInfo,
   Settings,
   SettingsUpdate,
   StructurePreview,
@@ -21,17 +23,45 @@ import {
   TrackDetails
 } from './models';
 
-export const API_BASE =
-  location.port === '4300' ? '/api' : `http://${location.hostname || '127.0.0.1'}:8000/api`;
+export const isNativeAndroid =
+  (window as { Capacitor?: { getPlatform?: () => string } }).Capacitor?.getPlatform?.() === 'android';
+
+// The Android app cannot reach 127.0.0.1 on the computer; the address is saved by scanning the QR code in Remote control.
+function androidApiBase(): string {
+  return `${localStorage.getItem('canto.serverUrl') ?? ''}/api`;
+}
+
+// Tauri serves the UI from tauri.localhost (Windows) or localhost (Linux); the backend is always local.
+const isDesktopApp = location.hostname === 'tauri.localhost';
+
+export const PIN_KEY = 'canto.pin';
+/** PIN for a shared computer, saved when the phone connects; sent as X-Canto-Pin (and ?pin= on media URLs) */
+export const savedPin = () => (isNativeAndroid ? (localStorage.getItem(PIN_KEY) ?? '') : '');
+
+export const API_BASE = isNativeAndroid
+  ? androidApiBase()
+  : location.port === '4200' || location.port === '4300'
+    ? '/api'
+    : `http://${isDesktopApp ? '127.0.0.1' : location.hostname || '127.0.0.1'}:8010/api`;
 
 export interface LyricsOptions {
   overwrite_lrc: boolean;
   overwrite_ttml: boolean;
+  embed: boolean;
 }
 
 export function errorMessage(err: unknown): string {
   if (err instanceof HttpErrorResponse) {
-    if (err.status === 0) return 'Cannot reach the backend (is it running on port 8000?)';
+    if (err.status === 0) {
+      if (isNativeAndroid) {
+        return API_BASE === '/api'
+          ? 'Not connected to a computer. Open Remote control and scan the QR code shown on the computer.'
+          : `Cannot reach the backend at ${API_BASE}. Is Sharing on, on the computer? Rescan the QR code in Remote control if the address changed.`;
+      }
+      return 'Cannot reach the backend (is it running on port 8010?)';
+    }
+    if (err.status === 401 && isNativeAndroid) return 'The PIN is missing or wrong. Open Remote control and scan the QR code on the computer again.';
+    if (err.status === 429) return 'Too many wrong PINs. Wait a minute, then rescan the QR code.';
     const detail = err.error?.detail;
     return typeof detail === 'string' ? detail : err.message;
   }
@@ -42,8 +72,18 @@ export function errorMessage(err: unknown): string {
 export class ApiService {
   private http = inject(HttpClient);
 
+  private pinQuery(sep: '?' | '&') {
+    const pin = savedPin();
+    return pin ? `${sep}pin=${encodeURIComponent(pin)}` : '';
+  }
+  audioUrl(id: number): string {
+    return `${API_BASE}/tracks/${id}/audio${this.pinQuery('?')}`;
+  }
   coverUrl(id: number, size = 96, version = 0): string {
-    return `${API_BASE}/tracks/${id}/cover?size=${size}&v=${version}`;
+    return `${API_BASE}/tracks/${id}/cover?size=${size}&v=${version}${this.pinQuery('&')}`;
+  }
+  animatedUrl(id: number, shape: 'square' | 'tall', version = 0): string {
+    return `${API_BASE}/tracks/${id}/animated/${shape}?v=${version}${this.pinQuery('&')}`;
   }
 
   private get<T>(path: string, params: Record<string, string | number> = {}) {
@@ -53,6 +93,15 @@ export class ApiService {
     return firstValueFrom(this.http.post<T>(`${API_BASE}${path}`, body));
   }
 
+  remoteInfo() {
+    return this.get<RemoteInfo>('/remote');
+  }
+  setSharing(enabled: boolean) {
+    return firstValueFrom(this.http.put<RemoteInfo>(`${API_BASE}/remote`, { enabled }));
+  }
+  setShareAutoStart(auto_start: boolean) {
+    return firstValueFrom(this.http.put<RemoteInfo>(`${API_BASE}/remote`, { auto_start }));
+  }
   status() {
     return this.get<{ message: string; checks: SystemCheck[] }>('/status');
   }
@@ -145,6 +194,17 @@ export class ApiService {
   }
   uploadCover(id: number, file: Blob) {
     return this.post<CoverInfo>(`/tracks/${id}/cover`, file);
+  }
+  animatedList(id: number) {
+    return this.get<AnimatedCovers>(`/tracks/${id}/animated`);
+  }
+  uploadAnimated(id: number, file: File, shape: 'square' | 'tall') {
+    return firstValueFrom(
+      this.http.post<{ shape: string; animated: AnimatedCovers }>(`${API_BASE}/tracks/${id}/animated`, file, { params: { name: file.name, shape } })
+    );
+  }
+  deleteAnimated(id: number, shape: 'square' | 'tall') {
+    return firstValueFrom(this.http.delete(`${API_BASE}/tracks/${id}/animated/${shape}`));
   }
   coverFromUrl(id: number, url: string) {
     return this.post<CoverInfo>(`/tracks/${id}/cover/from-url`, { url });

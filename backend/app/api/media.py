@@ -1,5 +1,8 @@
+import os
+import tempfile
+
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from .. import deps
@@ -16,6 +19,14 @@ class LyricsContent(BaseModel):
 
 class CoverUrl(BaseModel):
     url: str
+
+
+@router.get("/tracks/{item_id}/audio")
+def get_audio(item_id: int):
+    path = deps.tracks.audio_path(item_id)
+    if not path:
+        raise HTTPException(404, "Audio file not found")
+    return FileResponse(path)  # supports Range requests, so seeking works
 
 
 @router.get("/tracks/{item_id}/cover")
@@ -42,6 +53,54 @@ async def upload_cover(item_id: int, request: Request):
 @router.delete("/tracks/{item_id}/cover")
 def delete_cover(item_id: int):
     guard(lambda: deps.tracks.remove_cover(item_id))
+    return {"status": "success"}
+
+
+MAX_VIDEO = 400 * 1024 * 1024
+MEDIA_TYPES = {".mp4": "video/mp4", ".m4v": "video/mp4", ".mov": "video/quicktime", ".webm": "video/webm", ".mkv": "video/x-matroska", ".gif": "image/gif"}
+
+
+@router.get("/tracks/{item_id}/animated")
+def animated_list(item_id: int):
+    return guard(lambda: deps.tracks.animated_list(item_id))
+
+
+@router.post("/tracks/{item_id}/animated")
+async def upload_animated(item_id: int, request: Request, name: str = "cover.mp4", shape: str | None = None):
+    """Raw video body. The shape (tall/square) is detected from the picture unless `shape` is given."""
+    ext = os.path.splitext(name)[1] or ".mp4"
+    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as handle:
+        tmp = handle.name
+        size = 0
+        async for chunk in request.stream():
+            size += len(chunk)
+            if size > MAX_VIDEO:
+                handle.close()
+                os.unlink(tmp)
+                raise HTTPException(413, "Video is larger than 400 MB")
+            handle.write(chunk)
+    try:
+        if not size:
+            raise HTTPException(400, "Send the video file as the request body")
+        return guard(lambda: deps.tracks.animated_set(item_id, tmp, ext, shape))
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
+@router.get("/tracks/{item_id}/animated/{shape}")
+def get_animated(item_id: int, shape: str):
+    path = guard(lambda: deps.tracks.animated_path(item_id, shape)) if shape in ("square", "tall") else None
+    if not path:
+        raise HTTPException(404, "No animated cover")
+    return FileResponse(path, media_type=MEDIA_TYPES.get(os.path.splitext(path)[1].lower(), "video/mp4"))
+
+
+@router.delete("/tracks/{item_id}/animated/{shape}")
+def delete_animated(item_id: int, shape: str):
+    if shape not in ("square", "tall"):
+        raise HTTPException(400, "Shape must be square or tall")
+    guard(lambda: deps.tracks.animated_remove(item_id, shape))
     return {"status": "success"}
 
 

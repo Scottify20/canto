@@ -9,6 +9,8 @@ from beets import context as beets_context
 from beets import plugins
 from beets.library import Library
 
+from . import analysis
+from .audio import channel_count
 from ..core.settings import (
     BEETS_DIR,
     CONFIG_PATH,
@@ -21,6 +23,52 @@ from ..core.settings import (
 
 AUDIO_EXTENSIONS = {".mp3", ".flac", ".m4a", ".mp4", ".ogg", ".opus", ".wav", ".aac", ".wma", ".aiff", ".ape", ".wv"}
 PLUGINS = ["musicbrainz", "canto_sidecar", "chroma", "mbsync"]
+
+
+_multichannel_root: bytes | None = None
+
+
+def _install_multichannel_routing() -> None:
+    """Send files with more than two channels to their own library root (beets path formats can't change the root)."""
+    from beets.library import Item
+
+    if getattr(Item.destination, "_canto", False):
+        return
+    original = Item.destination
+
+    def destination(self, relative_to_libdir=False, basedir=None, *args, **kwargs):
+        if basedir is None and not relative_to_libdir and _multichannel_root and (self.get("channels") or 0) > 2:
+            basedir = _multichannel_root
+        return original(self, relative_to_libdir, basedir, *args, **kwargs)
+
+    destination._canto = True  # type: ignore[attr-defined]
+    Item.destination = destination  # type: ignore[method-assign]
+
+
+def _install_channel_probe() -> None:
+    """Item.read takes the channel count from mutagen, which reports stereo for E-AC-3 in MP4; correct it with ffprobe."""
+    from beets.library import Item
+
+    if getattr(Item.read, "_canto", False):
+        return
+    original = Item.read
+
+    def read(self, read_path=None):
+        original(self, read_path)
+        path = os.fsdecode(read_path or self.path)
+        channels = channel_count(path, self.get("channels"))
+        if channels != self.get("channels"):
+            self.channels = channels
+
+    read._canto = True  # type: ignore[attr-defined]
+    Item.read = read  # type: ignore[method-assign]
+
+
+def set_multichannel_root(path: str) -> None:
+    global _multichannel_root
+    _multichannel_root = os.fsencode(os.path.abspath(os.path.expanduser(path))) if path.strip() else None
+    _install_multichannel_routing()
+    _install_channel_probe()
 
 
 def with_fallbacks(structure: str) -> str:
@@ -71,6 +119,8 @@ class BeetsEngine:
     def apply_settings(self, s: Settings, persist: bool = True) -> None:
         with self._lock:
             self.settings = s
+            set_multichannel_root(s.multichannel_path)
+            analysis.MULTICHANNEL_OFFSET = s.multichannel_gain_offset
             if persist:
                 save_settings(s)
             self._write_config(s)

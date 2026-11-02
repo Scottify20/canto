@@ -10,7 +10,8 @@ from mediafile import MediaFile
 from ..core.jobs import Job
 from ..core.settings import BEETS_DIR
 from ..lyrics.service import LyricsService
-from . import analysis, covers
+from . import analysis, animated, covers
+from .audio import channel_count
 from .beets_engine import AUDIO_EXTENSIONS, BeetsEngine
 from .tracks import SIDECAR_EXTS, cluster_duplicates, dup_key, item_path, quality
 
@@ -26,20 +27,33 @@ class InboxService:
 
     # ---- scanning ------------------------------------------------------------
     @staticmethod
-    def _walk(root: str) -> list[str]:
-        found = []
+    def _walk(root: str) -> tuple[list[str], dict[str, dict[str, str]]]:
+        """Audio files plus, per folder, the animated cover videos ({dir: {"square"|"tall": path}})."""
+        found: list[str] = []
+        videos: dict[str, dict[str, str]] = {}
         for base, _dirs, files in os.walk(root):
-            found.extend(os.path.join(base, f) for f in sorted(files) if os.path.splitext(f)[1].lower() in AUDIO_EXTENSIONS)
+            for name in sorted(files):
+                ext = os.path.splitext(name)[1].lower()
+                path = os.path.join(base, name)
+                if ext in animated.VIDEO_EXTENSIONS:  # .mp4 is both: a video-only file is a cover, not a song
+                    info = animated.probe(path)
+                    kind = animated.shape(info)
+                    if kind:
+                        videos.setdefault(base, {}).setdefault(kind, path)
+                    if kind or ext != ".mp4" or (info and not info["audio"]):
+                        continue
+                if ext in AUDIO_EXTENSIONS:
+                    found.append(path)
             if len(found) >= MAX_FILES:
                 break
-        return found[:MAX_FILES]
+        return found[:MAX_FILES], videos
 
     @staticmethod
     def _read(path: str, root: str) -> dict:
         stem = os.path.splitext(path)[0]
         row = {
             "path": path, "rel": os.path.relpath(path, root), "size": 0, "title": "", "artist": "", "album": "",
-            "length": 0.0, "format": "", "bitrate": 0, "has_cover": False, "corrupt": False,
+            "length": 0.0, "format": "", "bitrate": 0, "channels": 2, "animated": [], "has_cover": False, "corrupt": False,
             "has_lrc": os.path.exists(stem + ".lrc"), "has_ttml": os.path.exists(stem + ".ttml"),
             "has_txt": os.path.exists(stem + ".txt"), "status": "new", "dup_of": None,
         }
@@ -48,7 +62,7 @@ class InboxService:
             media = MediaFile(path)
             row.update(
                 title=media.title or os.path.splitext(os.path.basename(path))[0], artist=media.artist or media.albumartist or "",
-                album=media.album or "", length=round(media.length or 0, 1), format=media.type or "", bitrate=media.bitrate or 0,
+                album=media.album or "", length=round(media.length or 0, 1), format=media.type or "", bitrate=media.bitrate or 0, channels=channel_count(path, media.channels),
                 has_cover=covers.has_embedded_art(path),
             )
             if not media.length:
@@ -63,9 +77,12 @@ class InboxService:
     def scan(self, root: str) -> dict:
         if not os.path.isdir(root):
             raise NotADirectoryError(f"Input folder not found: {root}")
-        paths = self._walk(root)
+        paths, videos = self._walk(root)
         with ThreadPoolExecutor(max_workers=8) as pool:
             rows = list(pool.map(lambda p: self._read(p, root), paths))
+        for row in rows:
+            row["animated_files"] = animated.folder_covers(os.path.dirname(row["path"]), videos)
+            row["animated"] = sorted(row["animated_files"])
         self._mark_duplicates(rows)
         counts: dict[str, int] = {}
         for row in rows:
@@ -76,15 +93,15 @@ class InboxService:
         """Flag files already in the library, and the lower-quality copies among identical inbox files."""
         library: dict[str, list] = {}
         for item in self.engine.lib.items():
-            library.setdefault(dup_key(item.artist, item.title), []).append(item)
+            library.setdefault(dup_key(item.artist, item.title, item.get("channels") or 2), []).append(item)
         for row in rows:
             if row["corrupt"]:
                 continue
-            for item in library.get(dup_key(row["artist"], row["title"]), []):
+            for item in library.get(dup_key(row["artist"], row["title"], row["channels"]), []):
                 if abs((item.length or 0) - row["length"]) <= 3.0:
                     row["status"], row["dup_of"] = "in_library", {"id": item.id, "path": item_path(item), "exists": os.path.exists(item_path(item))}
                     break
-        pending = [dict(r, key=dup_key(r["artist"], r["title"]), row=r) for r in rows if r["status"] == "new"]
+        pending = [dict(r, key=dup_key(r["artist"], r["title"], r["channels"]), row=r) for r in rows if r["status"] == "new"]
         for group in cluster_duplicates(pending):
             keep = max(group, key=lambda r: (r["format"].upper() in {"FLAC", "ALAC", "WAV"}, r["bitrate"], r["size"]))
             for member in group:
@@ -127,6 +144,7 @@ class InboxService:
             job.done = min(job.total, len({i.id for i in self.engine.lib.items()} - before))
         new_items = [i for i in self.engine.lib.items() if i.id not in before]
         self._post_process(job, new_items)
+        self._place_animated_covers(job, new_items, rows)
         if settings.delete_originals and settings.prune_empty_dirs:
             self._prune_empty(root)
         parts = [f"Imported {len(new_items)} track(s)"]
@@ -164,10 +182,36 @@ class InboxService:
         if process.returncode not in (0, None) and not job.cancelled:
             job.write(f"[Error] beets exited with code {process.returncode}")
 
+    def _place_animated_covers(self, job: Job, items: list, rows: list[dict]) -> None:
+        by_key = {dup_key(r["artist"], r["title"], r["channels"]): r for r in rows if r.get("animated_files")}
+        sources: set[str] = set()
+        albums = 0
+        for item in items:
+            item = self.engine.lib.get_item(item.id)  # re-read: multi-channel routing may have moved it
+            row = by_key.get(dup_key(item.artist, item.title, item.get("channels") or 2)) if item else None
+            if not row:
+                continue
+            directory = os.path.dirname(item_path(item))
+            if not any(f.startswith(animated.PREFIX) for f in os.listdir(directory)):
+                albums += 1
+            if animated.install(row["animated_files"], directory):
+                sources.update(row["animated_files"].values())
+        if albums:
+            job.write(f"[Animated cover] copied to {albums} album folder(s)")
+        if self.engine.settings.delete_originals:
+            for source in sources:
+                try:
+                    os.remove(source)
+                except OSError:
+                    pass
+
     def _post_process(self, job: Job, items: list) -> None:
         """Normalize lyric sidecars and guarantee analysis/artwork after import."""
         if not items:
             return
+        moved = self.tracks.route_multichannel(items)
+        if moved:
+            job.write(f"[Multi-channel] {moved} surround/Atmos track(s) filed in the multi-channel folder")
         for item in items:
             if job.cancelled:
                 break
@@ -213,6 +257,14 @@ class _Quiet:
     @property
     def cancelled(self):
         return self._job.cancelled
+
+    @property
+    def on_cancel(self):
+        return self._job.on_cancel
+
+    @on_cancel.setter
+    def on_cancel(self, fn):
+        self._job.on_cancel = fn
 
     def write(self, line: str) -> None:
         if not line.startswith("[Done]"):

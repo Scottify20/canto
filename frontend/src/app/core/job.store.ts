@@ -25,6 +25,8 @@ export class JobStore {
   private timer?: ReturnType<typeof setInterval>;
   private lastProgress = -1;
   private jobId = '';
+  private inFlight = false;
+  private announced = '';
 
   /** Pick up a job that was started before a page reload. */
   async resume() {
@@ -58,14 +60,20 @@ export class JobStore {
   }
 
   private async tick() {
+    if (this.inFlight) return; // slow links (phone over QR) would otherwise stack overlapping polls
+    this.inFlight = true;
     try {
+      const sent = this.jobId;
       const job = await this.api.currentJob(this.log().length);
-      if (!job || job.id !== this.jobId) return;
+      if (!job || job.id !== this.jobId || sent !== this.jobId) return;
       if (job.log.length) this.log.update((l) => [...l, ...job.log]);
       this.job.set({ ...job, log: [] });
       if (job.status !== 'running') {
         clearInterval(this.timer);
-        this.announce(job);
+        if (this.announced !== job.id) {
+          this.announced = job.id;
+          this.announce(job);
+        }
         this.onChange?.(true);
       } else if (job.done !== this.lastProgress) {
         this.lastProgress = job.done;
@@ -73,6 +81,8 @@ export class JobStore {
       }
     } catch {
       /* transient network error: keep polling */
+    } finally {
+      this.inFlight = false;
     }
   }
 

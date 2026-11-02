@@ -1,12 +1,14 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, input, output } from '@angular/core';
 import { Icon, IconName } from './icon';
+
+const openModals: Modal[] = [];
 
 /** Frosted-glass dialog: full-screen on phones, centred card on larger screens. */
 @Component({
   selector: 'app-modal',
   imports: [Icon],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { '(document:keydown.escape)': 'closed.emit()' },
+  host: { '(document:keydown.escape)': 'onEscape()' },
   template: `
     <div class="modal modal-open glass-backdrop anim-fade" role="dialog" aria-modal="true" (click)="closed.emit()">
       <div
@@ -27,7 +29,10 @@ import { Icon, IconName } from './icon';
     </div>
   `,
 })
-export class Modal {
+export class Modal implements OnDestroy {
+  constructor() { openModals.push(this); }
+  ngOnDestroy() { openModals.splice(openModals.indexOf(this), 1); }
+  onEscape() { if (openModals[openModals.length - 1] === this) this.closed.emit(); }
   title = input.required<string>();
   icon = input<IconName | null>(null);
   widthClass = input('max-w-2xl');

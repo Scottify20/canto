@@ -1,0 +1,12 @@
+{
+  "name": "canto-essentia",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Key + BPM analysis through essentia.js (WebAssembly)",
+  "scripts": {
+    "setup": "npm install --no-audit --no-fund && node slim.js"
+  },
+  "dependencies": {
+    "essentia.js": "0.1.3"
+  }
+}
