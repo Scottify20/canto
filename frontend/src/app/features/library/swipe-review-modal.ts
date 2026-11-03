@@ -31,7 +31,7 @@ const THRESHOLD = 90;
         <div class="flex items-center justify-between text-xs opacity-70 mb-2">
           <span>{{ queue().length }} left@if (matching()) { · fetching {{ jobs.job()?.done }}/{{ jobs.job()?.total }} }</span>
           <app-info-tip>
-            <b>Apply</b>: swipe right, press →, or tap ✓.<br /><b>Skip</b>: swipe left, press ←, or tap ✕.<br /><b>Later</b>: swipe up, press ↓, or tap the clock. The match is kept and moves to the end.<br /><b>Undo</b>: tap Undo within 5 seconds.
+            <b>Apply</b>: swipe right, press →, or tap ✓.<br /><b>Skip</b>: swipe left, press ←, or tap ✕.<br /><b>Later</b>: press ↓, or tap the clock. The match is kept and moves to the end.<br /><b>Undo</b>: tap Undo within 5 seconds.
           </app-info-tip>
         </div>
         <div class="relative select-none grow min-h-0">
@@ -50,16 +50,15 @@ const THRESHOLD = 90;
           }
           @for (k of [c.track.id]; track k) {
           <div
-            class="relative h-full rounded-2xl border border-base-content/15 bg-base-100/90 shadow-xl cursor-grab active:cursor-grabbing [touch-action:pan-y]" [style.touch-action]="swipeUpOk() ? 'none' : 'pan-y'"
+            class="relative h-full rounded-2xl border border-base-content/15 bg-base-100/90 shadow-xl cursor-grab active:cursor-grabbing [touch-action:pan-y]"
             [class]="enter() ? 'swipe-in-' + enter() : ''"
             [style.transform]="transform()"
             [style.transition]="dragging() ? 'none' : 'transform .25s ease'"
             (pointerdown)="down($event)" (pointermove)="move($event)" (pointerup)="up($event)" (pointercancel)="cancel()"
           >
             <div class="absolute top-3 left-3 rotate-[-12deg] border-2 border-success text-success rounded px-2 font-bold pointer-events-none" [style.opacity]="dx() > 0 ? min1(dx() / THRESHOLD) : 0">APPLY</div>
-            <div class="absolute top-3 left-1/2 -translate-x-1/2 border-2 border-info text-info rounded px-2 font-bold pointer-events-none" [style.opacity]="dy() < 0 ? min1(-dy() / THRESHOLD) : 0">LATER</div>
             <div class="absolute top-3 right-3 rotate-[12deg] border-2 border-error text-error rounded px-2 font-bold pointer-events-none" [style.opacity]="dx() < 0 ? min1(-dx() / THRESHOLD) : 0">SKIP</div>
-            <div data-scroll class="h-full overflow-y-auto p-4 [touch-action:pan-y]" (scroll)="measure()">
+            <div data-scroll class="h-full overflow-y-auto p-4 [touch-action:pan-y]">
             <div class="flex items-center gap-3 mb-3 pt-6">
               <button type="button" class="shrink-0 rounded-lg overflow-hidden" aria-label="Enlarge cover" (click)="big.set(!big())">
                 <img [src]="api.coverUrl(c.track.id, 160, lib.coverVersion())" alt="" class="size-24 object-cover bg-base-300" draggable="false" />
@@ -138,16 +137,7 @@ export class SwipeReviewModal implements OnDestroy {
   private inflight = signal<readonly number[]>([]);
   big = signal(false);
   dx = signal(0);
-  dy = signal(0);
-  /** Swipe-up needs touch-action none, so it is only enabled when the card has nothing left to scroll down */
-  swipeUpOk = signal(true);
-  private mode: 'h' | 'v' | null = null;
   private el = inject<ElementRef<HTMLElement>>(ElementRef);
-  private _measure = effect(() => { this.current(); setTimeout(() => this.measure()); });
-  measure() {
-    const box = this.el.nativeElement.querySelector<HTMLElement>('[data-scroll]');
-    this.swipeUpOk.set(!box || box.scrollHeight - box.clientHeight - box.scrollTop < 4);
-  }
   ghost = signal<{ kind: Fx; title: string } | null>(null);
   stamp = signal<{ kind: Fx; n: number } | null>(null);
   enter = signal<'' | 'right' | 'left' | 'up'>('');
@@ -184,7 +174,7 @@ export class SwipeReviewModal implements OnDestroy {
     return { track, source: cand.source, similarity: cand.similarity, fields, sources, selected: proposal.selected };
   });
 
-  transform = computed(() => `translate(${this.dx()}px, ${this.dy()}px) rotate(${this.dx() / 20}deg)`);
+  transform = computed(() => `translateX(${this.dx()}px) rotate(${this.dx() / 20}deg)`);
   min1 = (n: number) => Math.min(1, n);
 
   private startY = 0;
@@ -203,35 +193,24 @@ export class SwipeReviewModal implements OnDestroy {
     const mx = e.clientX - this.startX;
     const my = e.clientY - this.startY;
     if (!this.dragging()) {
-      if (Math.max(Math.abs(mx), Math.abs(my)) < 10) return;
-      if (Math.abs(mx) >= Math.abs(my)) this.mode = 'h';
-      else if (my < 0 && this.swipeUpOk()) this.mode = 'v';
-      else return;
+      if (Math.abs(mx) < 10 || Math.abs(mx) < Math.abs(my)) return;
       this.dragging.set(true);
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     }
-    if (this.mode === 'v') this.dy.set(Math.min(0, my));
-    else this.dx.set(mx);
+    this.dx.set(mx);
   }
   cancel() {
     this.tracking = false;
     this.dragging.set(false);
     this.dx.set(0);
-    this.dy.set(0);
-    this.mode = null;
   }
   up(_e: PointerEvent) {
     this.tracking = false;
     if (!this.dragging()) return;
     this.dragging.set(false);
     const d = this.dx();
-    const v = this.dy();
-    const mode = this.mode;
     this.dx.set(0);
-    this.dy.set(0);
-    this.mode = null;
-    if (mode === 'v') { if (v <= -THRESHOLD) this.later(); }
-    else if (Math.abs(d) >= THRESHOLD) this.decide(d > 0);
+    if (Math.abs(d) >= THRESHOLD) this.decide(d > 0);
   }
 
   icon = (k: Fx): IconName => ({ apply: 'check', skip: 'x', later: 'clock', undo: 'undo' } as const)[k];

@@ -103,7 +103,7 @@ function kind_(c: LyricsCandidate, kind: Kind): string | null {
         </ul>
       </section>
       @if (player()) {
-        @defer { <app-lyrics-player [trackId]="track().id" [title]="previewTitle()" [text]="previewText()" (closed)="player.set(false)" (saveTiming)="saveTiming($event)" /> }
+        @defer { <app-lyrics-player [trackId]="track().id" [channels]="track().channels" [title]="previewTitle()" [text]="previewText()" (closed)="player.set(false)" (saveTiming)="saveTiming($event)" /> }
       }
     </div>
   `,

@@ -15,7 +15,24 @@ import { Modal } from '../../shared/modal';
   template: `
     <app-modal [title]="title()" icon="mic" widthClass="max-w-4xl h-[90vh]" (closed)="closed.emit()">
       <div class="flex flex-col gap-3 h-full min-h-0">
-        <audio #audio class="w-full shrink-0" controls autoplay [src]="api.audioUrl(trackId())"></audio>
+        <audio #audio class="w-full shrink-0" controls autoplay [src]="api.audioUrl(trackId(), channels() > 2 ? mix() : '')"></audio>
+        @if (interrupted()) {
+          <div class="alert alert-warning alert-soft text-sm shrink-0 py-2 flex-wrap">
+            <app-icon name="warn" />
+            <span class="grow">Playback keeps stopping on its own. Another app (for example a music player) is probably holding the audio. Pause or close it, then press play again.</span>
+            <button class="btn btn-xs" (click)="retry()">Try again</button>
+          </div>
+        }
+        @if (channels() > 2) {
+          <div class="flex flex-wrap items-center gap-2 shrink-0 text-sm">
+            <span class="font-medium">Output</span>
+            <div class="join">
+              <button class="btn btn-xs join-item" [class.btn-primary]="mix() === 'surround'" (click)="mix.set('surround')">Surround</button>
+              <button class="btn btn-xs join-item" [class.btn-primary]="mix() === 'stereo'" (click)="mix.set('stereo')">Stereo</button>
+            </div>
+            <span class="opacity-70 text-xs">Surround plays the {{ channels() }}-channel song as 5.1 AAC (Atmos object data is not kept). Your system audio device must be set to 5.1 or more to hear it spread; otherwise the browser mixes it down.</span>
+          </div>
+        }
         <div class="flex flex-wrap items-center gap-1 shrink-0 text-sm">
           <span class="font-medium mr-1">Sync</span>
           @for (d of steps; track d) {
@@ -45,6 +62,17 @@ export class LyricsPlayer implements OnDestroy {
   private view = viewChild.required<ElementRef<any>>('view');
 
   trackId = input.required<number>();
+  channels = input(2);
+  mix = signal<'surround' | 'stereo'>('surround');
+  interrupted = signal(false);
+  private lastPlay = 0;
+  private strikes = 0;
+
+  retry() {
+    this.interrupted.set(false);
+    this.strikes = 0;
+    this.audio().nativeElement.play().catch(() => this.interrupted.set(true));
+  }
   title = input('Lyrics preview');
   text = input('');
   closed = output<void>();
@@ -66,6 +94,14 @@ export class LyricsPlayer implements OnDestroy {
       const audio = this.audio().nativeElement;
       view.host = { getScrollElement: () => frame };
       view.source = audio;
+      // A pause within 2 s of play() that the user did not ask for means another app took audio focus
+      audio.addEventListener('play', () => { this.lastPlay = Date.now(); });
+      audio.addEventListener('pause', () => {
+        if (!audio.ended && Date.now() - this.lastPlay < 2000 && ++this.strikes >= 2) this.interrupted.set(true);
+      });
+      audio.addEventListener('timeupdate', () => {
+        if (!audio.paused && Date.now() - this.lastPlay > 2500) { this.strikes = 0; if (this.interrupted()) this.interrupted.set(false); }
+      });
       // Only real user input counts; a 'scroll' listener also fires for the engine's own smooth
       // scrolls (e.g. after clicking a line) and made the follow animation stutter.
       const user = () => view.renderer?.noteUserScroll();

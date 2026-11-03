@@ -65,7 +65,6 @@ import { Icon } from '../../shared/icon';
           <button class="btn btn-xs btn-ghost tooltip tooltip-bottom" data-tip="Select every song in the whole library that is not selected now" (click)="lib.invertSelection()">Invert</button>
         } @else if (lib.filtered().length) {
           <button class="btn btn-xs btn-ghost" (click)="lib.selectAllFiltered()">Select all {{ lib.filtered().length }}</button>
-          <button class="btn btn-xs btn-ghost" (click)="lib.invertSelection()">Invert</button>
         }
         <div class="dropdown dropdown-end">
           <button tabindex="0" class="btn btn-sm btn-error btn-soft" [disabled]="jobs.running()"><app-icon name="trash" /> Remove <app-icon name="down" [size]="14" /></button>

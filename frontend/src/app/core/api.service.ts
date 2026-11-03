@@ -81,8 +81,9 @@ export class ApiService {
     const pin = savedPin();
     return pin ? `${sep}pin=${encodeURIComponent(pin)}` : '';
   }
-  audioUrl(id: number): string {
-    return `${API_BASE}/tracks/${id}/audio${this.pinQuery('?')}`;
+  audioUrl(id: number, mix: '' | 'stereo' | 'surround' = ''): string {
+    const q = this.pinQuery('?');
+    return `${API_BASE}/tracks/${id}/audio${mix ? (q ? q + '&' : '?') + 'mix=' + mix : q}`;
   }
   coverUrl(id: number, size = 96, version = 0): string {
     return `${API_BASE}/tracks/${id}/cover?size=${size}&v=${version}${this.pinQuery('&')}`;

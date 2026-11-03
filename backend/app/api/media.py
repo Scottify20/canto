@@ -1,4 +1,6 @@
 import os
+import shutil
+import subprocess
 import tempfile
 
 from starlette.concurrency import run_in_threadpool
@@ -22,11 +24,37 @@ class CoverUrl(BaseModel):
     url: str
 
 
+PREVIEW_DIR = os.path.join(tempfile.gettempdir(), "canto_preview")
+
+
+def _preview(item_id: int, path: str, mix: str) -> str:
+    st = os.stat(path)
+    os.makedirs(PREVIEW_DIR, exist_ok=True)
+    out = os.path.join(PREVIEW_DIR, f"{item_id}_{mix}_{int(st.st_mtime)}_{st.st_size}.m4a")
+    if os.path.isfile(out):
+        return out
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        raise HTTPException(500, "ffmpeg is not installed, so surround files cannot be previewed")
+    part = out + ".part.m4a"
+    proc = subprocess.run(
+        [ffmpeg, "-v", "error", "-y", "-i", path, "-map", "0:a:0", "-vn", *(["-ac", "2", "-b:a", "192k"] if mix == "stereo" else ["-ac", "6", "-b:a", "448k"]), "-c:a", "aac", "-movflags", "+faststart", part],
+        capture_output=True, text=True, timeout=600,
+    )
+    if proc.returncode != 0 or not os.path.isfile(part):
+        raise HTTPException(500, f"Could not create the preview: {proc.stderr.strip()[-200:]}")
+    os.replace(part, out)
+    return out
+
+
 @router.get("/tracks/{item_id}/audio")
-def get_audio(item_id: int):
+def get_audio(item_id: int, mix: str = ""):
     path = deps.tracks.audio_path(item_id)
     if not path:
         raise HTTPException(404, "Audio file not found")
+    if mix in ("stereo", "surround"):
+        # Browsers cannot decode E-AC-3/Atmos, so serve a cached AAC transcode (surround keeps up to 5.1 channels)
+        return FileResponse(_preview(item_id, path, mix), media_type="audio/mp4")
     return FileResponse(path)  # supports Range requests, so seeking works
 
 
