@@ -74,6 +74,7 @@ function setupBackend() {
   run('npm', ['run', 'setup'], path.join(backend, 'tools', 'essentia'));
 }
 
+run('node', [path.join(__dirname, 'git-hooks.js')], frontend, true);
 if (!args.has('--skip-system')) {
   if (isWin) setupWindowsSystem();
   else if (process.platform === 'linux') setupLinuxSystem();

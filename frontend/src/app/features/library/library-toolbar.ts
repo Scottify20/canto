@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { JobStore } from '../../core/job.store';
 import { LibraryStore } from '../../core/library.store';
 import { COLUMNS } from '../../core/models';
@@ -52,7 +52,7 @@ import { Icon } from '../../shared/icon';
           <app-icon name="save" /> Apply all ({{ lib.pendingCount() }})
         </button>
 
-        @if (lib.pendingCount()) {
+        @if (lib.pendingCount() || matching()) {
           <button class="btn btn-sm btn-primary tooltip tooltip-bottom" data-tip="Review proposed changes one by one (swipe on phones)" (click)="swipe.emit()">
             <app-icon name="sparkles" /> Swipe review
           </button>
@@ -96,6 +96,7 @@ export class LibraryToolbar {
   maximizeToggle = output<void>();
   duplicates = output<void>();
   swipe = output<void>();
+  matching = computed(() => this.jobs.running() && this.jobs.job()?.kind === 'match');
   remove = output<'selected' | 'all'>();
   columns = COLUMNS;
 }

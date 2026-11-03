@@ -101,11 +101,11 @@ export class LibraryStore {
 
   constructor() {
     this.jobs.onChange = (finished) => {
-      void this.load(true);
+      const matching = this.jobs.job()?.kind === 'match';
+      void this.load(true).then(() => (matching ? this.loadProposals(finished) : undefined));
       if (finished) {
         this.bumpCovers();
         void this.settings.refreshFolders();
-        if (this.jobs.job()?.kind === 'match') void this.loadProposals(true);
       }
     };
   }
@@ -223,8 +223,14 @@ export class LibraryStore {
   dismiss(id: number, reviewed = false) {
     const had = !!this.proposals()[id];
     this.proposals.update((all) => { const n = { ...all }; delete n[id]; return n; });
-    if (had) void this.api.resolveMatch(id, reviewed).then((t) => this.patch(t)).catch(() => undefined);
+    if (had) {
+      // keeps a live proposal refresh from re-adding the card before the server has resolved it
+      this.resolving.add(id);
+      void this.api.resolveMatch(id, reviewed).then((t) => this.patch(t)).catch(() => undefined).finally(() => this.resolving.delete(id));
+    }
   }
+
+  private resolving = new Set<number>();
 
   /** Proposals are kept on the server, so lookups made earlier (or from another device) come back after a reload. */
   async loadProposals(announce = false) {
@@ -236,7 +242,7 @@ export class LibraryStore {
       for (const [key, candidates] of Object.entries(stored)) {
         const id = Number(key);
         const track = byId.get(id);
-        if (!track || next[id]) continue;
+        if (!track || next[id] || this.resolving.has(id)) continue;
         const proposal = this.buildProposal(track, candidates);
         if (this.changedFields(track, proposal).length) { next[id] = proposal; added++; }
         else void this.api.resolveMatch(id, false).catch(() => undefined);
@@ -365,9 +371,6 @@ export class LibraryStore {
   }
 
   startAnalysis(ids: number[] | null, force = this.settings.reanalyze()) {
-    if (!this.settings.runsOnServer('analysis')) {
-      return this.runOnDevice('Analysing', ids, (id) => this.runJobToEnd(() => this.api.startAnalysis([id], force)));
-    }
     return this.jobs.start(() => this.api.startAnalysis(ids, force));
   }
 

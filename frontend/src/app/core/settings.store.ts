@@ -35,7 +35,7 @@ export class SettingsStore {
   readonly runAllOnServer = signal(true);
   readonly runWhere = signal<Record<TaskKind, RunWhere>>({ metadata: 'server', lyrics: 'server', covers: 'server', analysis: 'server' });
   runsOnServer(task: TaskKind): boolean {
-    return this.runAllOnServer() || this.runWhere()[task] === 'server';
+    return task === 'analysis' || this.runAllOnServer() || this.runWhere()[task] === 'server';
   }
   readonly hasDiscogsToken = signal(false);
   readonly providers = signal<ProviderState[]>([]);

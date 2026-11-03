@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnDestroy, effect, computed, inject, output, signal } from '@angular/core';
 import { ApiService } from '../../core/api.service';
+import { JobStore } from '../../core/job.store';
 import { LibraryStore } from '../../core/library.store';
 import { TAG_LABELS, Track } from '../../core/models';
 import { Icon, IconName } from '../../shared/icon';
@@ -27,7 +28,7 @@ const THRESHOLD = 90;
       @if (current(); as c) {
        <div class="flex flex-col h-full sm:h-[70vh]">
         <div class="flex items-center justify-between text-xs opacity-70 mb-2">
-          <span>{{ queue().length }} left</span>
+          <span>{{ queue().length }} left@if (matching()) { · fetching {{ jobs.job()?.done }}/{{ jobs.job()?.total }} }</span>
           <span class="hidden sm:inline">Use ← → keys or the buttons</span>
           <span class="sm:hidden">Swipe right to apply, left to skip, clock = later</span>
         </div>
@@ -102,7 +103,11 @@ const THRESHOLD = 90;
         </div>
        </div>
       } @else {
-        <div class="p-8 text-center opacity-80"><app-icon name="ok" [size]="30" class="text-success" /><div class="mt-2">All reviewed.</div></div>
+        @if (matching()) {
+          <div class="p-8 text-center opacity-80"><span class="loading loading-spinner loading-md"></span><div class="mt-2">Everything fetched so far is reviewed. Waiting for more matches ({{ jobs.job()?.done }}/{{ jobs.job()?.total }})…</div></div>
+        } @else {
+          <div class="p-8 text-center opacity-80"><app-icon name="ok" [size]="30" class="text-success" /><div class="mt-2">All reviewed.</div></div>
+        }
       }
 
       @if (stack().length) {
@@ -121,6 +126,8 @@ const THRESHOLD = 90;
 export class SwipeReviewModal implements OnDestroy {
   api = inject(ApiService);
   lib = inject(LibraryStore);
+  jobs = inject(JobStore);
+  matching = computed(() => this.jobs.running() && this.jobs.job()?.kind === 'match');
   closed = output<void>();
   readonly THRESHOLD = THRESHOLD;
 

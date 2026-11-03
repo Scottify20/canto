@@ -2,6 +2,7 @@
   "name": "canto",
   "private": true,
   "scripts": {
+    "prepare": "node frontend/scripts/git-hooks.js",
     "setup": "node frontend/scripts/setup.js",
     "setup:app": "node frontend/scripts/setup.js --skip-system",
     "clean": "node frontend/scripts/clean.js",
