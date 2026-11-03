@@ -1,5 +1,5 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostListener, OnInit, inject, signal } from '@angular/core';
 import { ApiService, isNativeAndroid } from './core/api.service';
 import { InboxStore } from './core/inbox.store';
 import { JobStore } from './core/job.store';
@@ -163,6 +163,16 @@ export class App implements OnInit {
     await this.jobs.resume();
     if (!this.lib.tracks().length && this.settings.inputPath()) this.view.set('inbox');
     void this.inbox.refresh(true);
+  }
+
+  @HostListener('window:focus')
+  @HostListener('document:visibilitychange')
+  async onReturn() {
+    if (document.visibilityState === 'hidden' || !this.online()) return;
+    if (await this.settings.refreshFolders()) {
+      await this.lib.load(true);
+      void this.inbox.refresh(true);
+    }
   }
 
   openInbox() {

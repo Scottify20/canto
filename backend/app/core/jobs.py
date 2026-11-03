@@ -51,6 +51,7 @@ class JobManager:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._current: Job | None = None
+        self.on_finish: list[Callable[[Job], None]] = []
 
     @property
     def current(self) -> Job | None:
@@ -76,6 +77,11 @@ class JobManager:
                 job.status = "error"
             finally:
                 job.finished_at = time.time()
+                for hook in self.on_finish:
+                    try:
+                        hook(job)
+                    except Exception:  # noqa: BLE001
+                        pass
 
         threading.Thread(target=runner, name=f"job-{kind}", daemon=True).start()
         return job

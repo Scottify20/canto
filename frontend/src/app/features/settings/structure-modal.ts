@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, OnInit, inject, output, signal } from '@angular/core';
 import { ApiService } from '../../core/api.service';
 import { StructurePreview } from '../../core/models';
 import { SettingsStore } from '../../core/settings.store';
@@ -70,6 +70,9 @@ const VARIABLES = ['$albumartist', '$artist', '$album', '$title', '$track', '$di
           </div>
           <app-path-field label="Multi-channel output folder" placeholder="/path/to/music-surround" hint="Uses the same folder structure as above."
             [value]="multichannelPath()" (valueChange)="multichannelPath.set($event)" />
+          @for (f of offlineFolders(); track f.label) {
+            <div class="alert alert-warning alert-soft text-xs py-2"><app-icon name="warn" [size]="14" /> {{ f.label }} is unavailable ({{ f.reason }}). Imports that need it wait, and nothing is moved until it is back.</div>
+          }
         </div>
 
         <div class="collapse collapse-arrow bg-base-content/5 rounded-lg">
@@ -100,6 +103,11 @@ export class StructureModal implements OnInit {
   variables = VARIABLES;
   template = signal('');
   multichannelPath = signal('');
+  offlineFolders = computed(() => {
+    const f = this.s.folders();
+    const entries = [{ label: 'Output folder', st: f?.output }, { label: '5.1 folder', st: f?.multichannel }];
+    return entries.flatMap(({ label, st }) => (st && !st.ok ? [{ label, reason: st.reason }] : []));
+  });
   preview = signal<StructurePreview | null>(null);
   error = signal('');
   private timer?: ReturnType<typeof setTimeout>;
@@ -107,6 +115,7 @@ export class StructureModal implements OnInit {
   ngOnInit() {
     this.template.set(this.s.folderStructure());
     this.multichannelPath.set(this.s.multichannelPath());
+    void this.s.refreshFolders();
     void this.refresh();
   }
 

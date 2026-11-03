@@ -15,10 +15,20 @@ AUDIO_EXTS = {".mp3", ".flac", ".m4a", ".mp4", ".ogg", ".opus", ".wav", ".aac", 
 class CantoSidecarPlugin(BeetsPlugin):
     def __init__(self):
         super().__init__()
-        self.config.add({"extensions": [".lrc", ".ttml", ".txt"]})
+        self.config.add({"extensions": [".lrc", ".ttml", ".txt"], "multichannel_root": ""})
         self.register_listener("item_copied", self._on_copied)
         self.register_listener("item_moved", self._on_moved)
         self.template_fields["surround"] = self._surround
+        self._route_multichannel()
+
+    def _route_multichannel(self):
+        """Import runs in its own process: give it the same channel probe and 5.1 library root as the app."""
+        try:
+            from app.services.beets_engine import set_multichannel_root
+        except ImportError as exc:
+            self._log.warning("multi-channel routing unavailable: {}", exc)
+            return
+        set_multichannel_root(self.config["multichannel_root"].get(str) or "")
 
     @staticmethod
     def _surround(item):

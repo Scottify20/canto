@@ -55,7 +55,7 @@ class MaintenanceService:
         return glob.glob(str(BEETS_DIR / "musiclibrary.db-before-*.bak"))
 
     def _missing(self) -> list[int]:
-        return [i.id for i in self.engine.lib.items() if not os.path.exists(item_path(i))]
+        return self.tracks.missing_ids()
 
     @staticmethod
     def _size(paths: list[str]) -> int:

@@ -57,7 +57,7 @@ export class LibraryStore {
         case 'lossy': return !LOSSLESS.test(t.format);
         case 'recent': return t.added * 1000 > Date.now() - 7 * 864e5;
         case 'no-cover': return !t.has_cover;
-        case 'missing': return !t.exists;
+        case 'missing': return !t.exists && !t.offline;
         case 'duplicates': return t.dup_group !== null;
         case 'review': return !!proposals[t.id];
         default: return true;
@@ -85,7 +85,8 @@ export class LibraryStore {
       lrc: t.filter((x) => x.has_lrc).length,
       ttml: t.filter((x) => x.has_ttml).length,
       cover: t.filter((x) => x.has_cover).length,
-      missing: t.filter((x) => !x.exists).length,
+      missing: t.filter((x) => !x.exists && !x.offline).length,
+      offline: t.filter((x) => x.offline).length,
       duplicates: t.filter((x) => x.dup_group !== null).length,
     };
   });

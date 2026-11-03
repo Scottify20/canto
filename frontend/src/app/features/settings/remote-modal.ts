@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, inject, output, signal, viewChild, ElementRef } from '@angular/core';
 import jsQR from 'jsqr';
 import QRCode from 'qrcode';
+import { isSealedPairing, openPairing, sealPairing } from '../../shared/qr-crypto';
 import { API_BASE, ApiService, PIN_KEY, errorMessage, isNativeAndroid } from '../../core/api.service';
 import { RemoteInfo } from '../../core/models';
 import { ToastService } from '../../core/toast.service';
@@ -172,7 +173,7 @@ export class RemoteModal implements OnInit, OnDestroy {
   async choose(url: string) {
     this.url.set(url);
     const pin = this.info()?.pin;
-    this.qr.set(await QRCode.toDataURL(pin ? `${url}/?pin=${pin}` : url, { margin: 1, width: 480, errorCorrectionLevel: 'M' }));
+    this.qr.set(await QRCode.toDataURL(await sealPairing(url, pin ?? undefined), { margin: 1, width: 480, errorCorrectionLevel: 'M' }));
   }
 
   copy() {
@@ -211,7 +212,7 @@ export class RemoteModal implements OnInit, OnDestroy {
         canvas.height = video.videoHeight * scale;
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const code = jsQR(ctx.getImageData(0, 0, canvas.width, canvas.height).data, canvas.width, canvas.height);
-        if (code && /^https?:\/\/[^/\s]+/.test(code.data)) {
+        if (code && (isSealedPairing(code.data) || /^https?:\/\/[^/\s]+/.test(code.data))) {
           this.connect(code.data, '', true);
           return;
         }
@@ -230,6 +231,16 @@ export class RemoteModal implements OnInit, OnDestroy {
   async connect(raw: string, pinText = '', fromScan = false) {
     let url = raw.trim();
     let pin = pinText.trim();
+    if (isSealedPairing(url)) {
+      const sealed = await openPairing(url);
+      if (!sealed) {
+        this.toast.error('This QR code is damaged or not from Canto.');
+        if (fromScan && this.stream) setTimeout(() => this.scanLoop(this.video()!.nativeElement), 1500);
+        return;
+      }
+      url = sealed.u;
+      pin = sealed.p ?? pin;
+    }
     try {
       const parsed = new URL(url);
       pin = parsed.searchParams.get('pin') ?? pin; // the QR code carries address and PIN together

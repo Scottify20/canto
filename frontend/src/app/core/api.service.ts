@@ -5,7 +5,9 @@ import {
   AnimatedCovers,
   CoverCandidate,
   CoverInfo,
+  BackupInfo,
   DuplicateGroup,
+  RebaseResult,
   FsListing,
   InboxScan,
   Job,
@@ -138,6 +140,18 @@ export class ApiService {
   }
   pruneMissing() {
     return this.post<{ removed: number }>('/library/prune-missing');
+  }
+  backupInfo() {
+    return this.get<BackupInfo>('/library/backup');
+  }
+  backupNow() {
+    return this.post<BackupInfo>('/library/backup');
+  }
+  restoreBackup() {
+    return this.post<{ tracks: number }>('/library/restore');
+  }
+  rebasePaths(old_root: string, new_root: string, dry_run: boolean) {
+    return this.post<RebaseResult>('/library/rebase', { old_root, new_root, dry_run });
   }
   duplicates() {
     return this.get<{ groups: DuplicateGroup[] }>('/duplicates').then((r) => r.groups);

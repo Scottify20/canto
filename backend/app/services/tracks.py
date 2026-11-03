@@ -10,6 +10,7 @@ from PIL import Image
 
 from . import animated, covers
 from .beets_engine import BeetsEngine
+from .storage import volume_online
 
 TEXT_FIELDS = ["title", "artist", "albumartist", "album", "subtitle", "grouping", "comments", "label", "catalognum", "isrc", "language", "initial_key",
                "artist_sort", "albumartist_sort", "composer_sort", "albumtype", "albumdisambig", "media", "disctitle", "copyright", "country", "barcode", "asin", "url",
@@ -118,6 +119,7 @@ class TrackService:
             "initial_key": item.get("initial_key", ""),
             "path": path,
             "exists": exists,
+            "offline": not exists and not volume_online(path),
             "has_lrc": f"{stem}.lrc" in siblings,
             "has_ttml": f"{stem}.ttml" in siblings,
             "has_cover": False,
@@ -170,6 +172,8 @@ class TrackService:
         if not item:
             raise LookupError("Track not found")
         if not os.path.exists(item_path(item)):
+            if not volume_online(item_path(item)):
+                raise FileNotFoundError("The drive holding this file isn't connected — plug it in and try again")
             raise FileNotFoundError("Audio file is missing on disk — remove the entry or re-import the file")
         tags = {("genres" if k == "genre" else k): v for k, v in tags.items()}
         old_dir = os.path.dirname(item_path(item))
@@ -188,11 +192,16 @@ class TrackService:
             elif key in TEXT_FIELDS or key in PROVENANCE_FIELDS:
                 setattr(item, key, "" if value is None else str(value))
         self._reconcile_album(item, tags)
-        item.try_sync(write=True, move=True)
+        item.try_sync(write=True, move=self._can_move(item))
         new_dir = os.path.dirname(item_path(item))
         if new_dir != old_dir:
             self._prune(old_dir)
         return self.get_track(item_id)
+
+    def _can_move(self, item) -> bool:
+        """Don't let a rename recreate the library folders on the system disk while their drive is unplugged."""
+        destination = os.fsdecode(item.destination())
+        return volume_online(destination) and volume_online(item_path(item))
 
     def _prune(self, directory: str) -> None:
         """Remove emptied folders under the library root and the multi-channel root."""
@@ -208,6 +217,8 @@ class TrackService:
         for item in items:
             item = self.lib.get_item(item.id)
             if not item or (item.get("channels") or 0) <= 2 or not os.path.exists(item_path(item)):
+                continue
+            if not self._can_move(item):
                 continue
             if os.path.normpath(os.fsdecode(item.destination())) == os.path.normpath(item_path(item)):
                 continue
@@ -269,8 +280,12 @@ class TrackService:
     def clear(self, delete_files: bool) -> int:
         return self.remove([i.id for i in self.lib.items()], delete_files)
 
+    def missing_ids(self) -> list[int]:
+        """Entries whose file is gone — ignoring those on drives that are simply unplugged."""
+        return [i.id for i in self.lib.items() if not os.path.exists(item_path(i)) and volume_online(item_path(i))]
+
     def prune_missing(self) -> int:
-        gone = [i.id for i in self.lib.items() if not os.path.exists(item_path(i))]
+        gone = self.missing_ids()
         return self.remove(gone, delete_files=False)
 
     def duplicates(self) -> list[dict]:

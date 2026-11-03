@@ -14,19 +14,24 @@ PREFIX = "animated-cover-"
 
 
 def probe(path: str) -> dict | None:
-    """Return {"audio": bool, "width": int, "height": int} or None when ffprobe can't read the file."""
+    """Return {"audio": bool, "width": int, "height": int, "moving_video": bool} or None when ffprobe can't read the file."""
     if not shutil.which("ffprobe"):
         return None
     try:
         out = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,width,height", "-of", "json", path],
+            ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,width,height:stream_disposition=attached_pic", "-of", "json", path],
             capture_output=True, text=True, timeout=20, check=True,
         ).stdout
         streams = json.loads(out).get("streams", [])
     except (subprocess.SubprocessError, OSError, ValueError):
         return None
-    video = next((s for s in streams if s.get("codec_type") == "video" and s.get("width")), None)
-    return {"audio": any(s.get("codec_type") == "audio" for s in streams), "width": (video or {}).get("width", 0), "height": (video or {}).get("height", 0)}
+    videos = [s for s in streams if s.get("codec_type") == "video" and s.get("width")]
+    video = next((s for s in videos if not (s.get("disposition") or {}).get("attached_pic")), None) or next(iter(videos), None)
+    moving = any(not (s.get("disposition") or {}).get("attached_pic") for s in videos)
+    return {
+        "audio": any(s.get("codec_type") == "audio" for s in streams), "width": (video or {}).get("width", 0),
+        "height": (video or {}).get("height", 0), "moving_video": moving,
+    }
 
 
 def shape(info: dict | None) -> str | None:

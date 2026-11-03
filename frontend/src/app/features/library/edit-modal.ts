@@ -24,7 +24,9 @@ export type EditTab = 'meta' | 'lyrics' | 'cover';
         <button role="tab" class="tab flex-1 gap-1" [class.tab-active]="tab() === 'cover'" (click)="tab.set('cover')"><app-icon name="image" [size]="14" /> Cover</button>
       </div>
 
-      @if (!current().exists) {
+      @if (current().offline) {
+        <div class="alert alert-warning alert-soft mb-3 text-sm"><app-icon name="warn" /> The drive holding this file isn't connected, so it can't be edited right now. Plug it in and reopen.</div>
+      } @else if (!current().exists) {
         <div class="alert alert-warning alert-soft mb-3 text-sm"><app-icon name="warn" /> The audio file is missing on disk, so nothing can be edited. Remove this entry or restore the file.</div>
       }
 

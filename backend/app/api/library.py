@@ -7,9 +7,17 @@ from .. import deps
 from ..core.jobs import jobs
 from ..services.filesystem import list_directory
 from ..services.health import system_health
+from ..services.storage import root_status
 from .common import guard
 
 router = APIRouter(prefix="/api")
+jobs.on_finish.append(lambda job: deps.library_backup.schedule() if job.status == "done" else None)
+
+
+class RebaseRequest(BaseModel):
+    old_root: str
+    new_root: str
+    dry_run: bool = True
 
 
 class ProviderUpdate(BaseModel):
@@ -59,6 +67,10 @@ def settings_payload() -> dict:
         "prune_empty_dirs": s.prune_empty_dirs, "multichannel_path": s.multichannel_path,
         "multichannel_gain_offset": s.multichannel_gain_offset, "has_discogs_token": bool(s.discogs_token),
         "providers": deps.lyrics.provider_states(),
+        "folders": {
+            "input": root_status(s.input_path), "output": root_status(s.output_path, must_exist=False),
+            "multichannel": root_status(s.multichannel_path, must_exist=False) if s.multichannel_path.strip() else None,
+        },
     }
 
 
@@ -115,17 +127,41 @@ def fetch_match(body: MatchRequest):
 
 @router.post("/tags/update")
 def update_tags(body: TagUpdate):
-    return {"status": "success", "track": guard(lambda: deps.tracks.update_tags(body.id, body.tags))}
+    track = guard(lambda: deps.tracks.update_tags(body.id, body.tags))
+    deps.library_backup.schedule()
+    return {"status": "success", "track": track}
 
 
 @router.post("/tracks/remove")
 def remove_tracks(body: RemoveRequest):
-    return {"removed": guard(lambda: deps.tracks.remove(body.ids, body.delete_files))}
+    removed = guard(lambda: deps.tracks.remove(body.ids, body.delete_files))
+    deps.library_backup.schedule()
+    return {"removed": removed}
 
 
 @router.post("/library/clear")
 def clear_library(body: ClearRequest):
     return {"removed": guard(lambda: deps.tracks.clear(body.delete_files))}
+
+
+@router.get("/library/backup")
+def backup_info():
+    return deps.library_backup.info()
+
+
+@router.post("/library/backup")
+def backup_now():
+    return guard(deps.library_backup.backup_now)
+
+
+@router.post("/library/restore")
+def restore_backup():
+    return guard(deps.library_backup.restore)
+
+
+@router.post("/library/rebase")
+def rebase_paths(body: RebaseRequest):
+    return guard(lambda: deps.library_backup.rebase(body.old_root, body.new_root, body.dry_run))
 
 
 @router.post("/library/prune-missing")

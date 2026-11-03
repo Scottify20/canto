@@ -24,6 +24,8 @@ export class SettingsStore {
   readonly duplicateAction = signal<DuplicateAction>('skip');
   readonly pruneEmptyDirs = signal(true);
   readonly multichannelPath = signal('');
+  /** Whether each configured folder is reachable (a drive may be unplugged) */
+  readonly folders = signal<Settings['folders'] | null>(null);
   readonly multichannelGainOffset = signal(0);
   readonly hasDiscogsToken = signal(false);
   readonly providers = signal<ProviderState[]>([]);
@@ -84,6 +86,18 @@ export class SettingsStore {
     }
   }
 
+  /** Re-check folder availability; resolves true when a folder has just come back online. */
+  async refreshFolders(): Promise<boolean> {
+    try {
+      const next = (await this.api.getSettings()).folders ?? null;
+      const was = this.folders();
+      this.folders.set(next);
+      return !!was && !!next && (Object.keys(next) as ('input' | 'output' | 'multichannel')[]).some((k) => !was[k]?.ok && next[k]?.ok);
+    } catch {
+      return false;
+    }
+  }
+
   async hydrateFromBackend() {
     try {
       this.apply(await this.api.getSettings());
@@ -100,6 +114,7 @@ export class SettingsStore {
     this.deleteOriginals.set(s.delete_originals);
     this.duplicateAction.set(s.duplicate_action);
     this.pruneEmptyDirs.set(s.prune_empty_dirs);
+    this.folders.set(s.folders ?? null);
     this.multichannelPath.set(s.multichannel_path ?? '');
     this.multichannelGainOffset.set(s.multichannel_gain_offset ?? 0);
     this.hasDiscogsToken.set(s.has_discogs_token);

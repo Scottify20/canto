@@ -21,6 +21,8 @@ export interface Track {
   initial_key: string;
   path: string;
   exists: boolean;
+  /** The file is absent because its drive isn't connected */
+  offline: boolean;
   has_lrc: boolean;
   has_ttml: boolean;
   has_cover: boolean;
@@ -97,6 +99,7 @@ export interface Settings {
   multichannel_path: string;
   multichannel_gain_offset: number;
   has_discogs_token: boolean;
+  folders?: Record<'input' | 'output' | 'multichannel', { path: string; ok: boolean; reason: string } | null>;
   providers: ProviderState[];
 }
 
@@ -200,6 +203,7 @@ export interface InboxScan {
   files: InboxFile[];
   counts: Partial<Record<InboxStatus, number>>;
   truncated: boolean;
+  videos_skipped?: number;
 }
 
 export interface DuplicateGroup {
@@ -299,3 +303,18 @@ export type LibraryFilter =
   | 'missing'
   | 'duplicates'
   | 'review';
+
+export interface BackupInfo {
+  available: boolean;
+  folder: string | null;
+  writable_target: boolean;
+  saved_at: number | null;
+  tracks: number | null;
+}
+
+export interface RebaseResult {
+  matched: number;
+  found_at_new: number;
+  total: number;
+  applied: boolean;
+}

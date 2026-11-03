@@ -1,6 +1,7 @@
 from .lyrics.service import LyricsService
 from .services.beets_engine import BeetsEngine
 from .services.inbox import InboxService
+from .services.library_backup import LibraryBackupService
 from .services.matcher import MatchService
 from .services.tracks import TrackService
 
@@ -9,3 +10,4 @@ tracks = TrackService(engine)
 matcher = MatchService(engine)
 lyrics = LyricsService(engine)
 inbox = InboxService(engine, tracks, lyrics)
+library_backup = LibraryBackupService(engine)

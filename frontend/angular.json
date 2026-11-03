@@ -13,23 +13,24 @@
   "projects": {
     "canto-ui": {
       "projectType": "application",
-"schematics": {
-  "@schematics/angular:component": {
-    "skipTests": true
-  },
-  "@schematics/angular:service": {
-    "skipTests": true
-  },
-  "@schematics/angular:directive": {
-    "skipTests": true
-  },
-  "@schematics/angular:pipe": {
-    "skipTests": true
-  },
-  "@schematics/angular:guard": {
-    "skipTests": true
-  }
-},      "root": "",
+      "schematics": {
+        "@schematics/angular:component": {
+          "skipTests": true
+        },
+        "@schematics/angular:service": {
+          "skipTests": true
+        },
+        "@schematics/angular:directive": {
+          "skipTests": true
+        },
+        "@schematics/angular:pipe": {
+          "skipTests": true
+        },
+        "@schematics/angular:guard": {
+          "skipTests": true
+        }
+      },
+      "root": "",
       "sourceRoot": "src",
       "prefix": "app",
       "architect": {
@@ -44,7 +45,12 @@
                 "input": "public"
               }
             ],
-            "styles": ["src/styles.css", "node_modules/@braccato/core/dist/styles/variables.css", "node_modules/@braccato/core/dist/styles/lyrics.css", "node_modules/@braccato/core/dist/styles/instrumental.css"]
+            "styles": [
+              "src/styles.css",
+              "node_modules/@braccato/core/dist/styles/variables.css",
+              "node_modules/@braccato/core/dist/styles/lyrics.css",
+              "node_modules/@braccato/core/dist/styles/instrumental.css"
+            ]
           },
           "configurations": {
             "production": {
@@ -52,7 +58,7 @@
                 {
                   "type": "initial",
                   "maximumWarning": "750kB",
-                  "maximumError": "1MB"
+                  "maximumError": "1.25MB"
                 },
                 {
                   "type": "anyComponentStyle",

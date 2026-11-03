@@ -5,6 +5,7 @@ import threading
 from contextlib import asynccontextmanager
 
 from .api import jobs, library, media, remote, workspace
+from . import deps
 from .services import sharing
 from .services.pin_guard import PinMiddleware
 
@@ -18,6 +19,7 @@ async def lifespan(_app: FastAPI):
         except RuntimeError:
             pass  # port busy: the user can retry from Remote control
     yield
+    deps.library_backup.flush()
     sharing.stop()
     workspace.maintenance.quick_cleanup()
 

@@ -29,7 +29,15 @@ import { Icon } from '../../shared/icon';
         </button>
       </div>
 
+      @if (s.folders()?.input; as f) {
+        @if (!f.ok) {
+          <div class="alert alert-warning alert-soft mx-3 mt-2 text-sm"><app-icon name="warn" /> Input folder unavailable ({{ f.reason }}). Reconnect the drive — this page updates when you return.</div>
+        }
+      }
       @if (inbox.scan(); as scan) {
+        @if (scan.videos_skipped) {
+          <div class="px-3 pt-2 text-xs opacity-70 flex items-center gap-1"><app-icon name="film" [size]="12" /> {{ scan.videos_skipped }} music video file(s) ignored — Canto only imports audio.</div>
+        }
         <div class="flex flex-wrap gap-2 items-center px-3 py-2 text-xs">
           <span class="badge badge-success badge-soft">{{ scan.counts.new ?? 0 }} new</span>
           <span class="badge badge-info badge-soft tooltip" data-tip="Already in your library">{{ scan.counts.in_library ?? 0 }} in library</span>

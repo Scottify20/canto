@@ -112,7 +112,7 @@ class BeetsEngine:
             "paths": {"default": structure, "singleton": structure},
             "chroma": {"auto": False},
             "discogs": {"user_token": s.discogs_token},
-            "canto_sidecar": {"extensions": [".lrc", ".ttml", ".txt"]},
+            "canto_sidecar": {"extensions": [".lrc", ".ttml", ".txt"], "multichannel_root": s.multichannel_path.strip()},
         }
         CONFIG_PATH.write_text(yaml.safe_dump(config, sort_keys=False, allow_unicode=True))
 

@@ -98,7 +98,14 @@ export interface OpenEdit {
                     <app-icon name="film" [size]="12" />
                   </span>
                 }
-                @if (!track().exists) {
+                @if (track().offline) {
+                  <span
+                    class="badge badge-sm badge-warning h-auto min-h-5 py-0.5 whitespace-nowrap tooltip"
+                    data-tip="This file is on a drive that isn't connected. Plug it in and refresh — nothing was deleted."
+                  >
+                    drive offline
+                  </span>
+                } @else if (!track().exists) {
                   <span
                     class="badge badge-sm badge-error h-auto min-h-5 py-0.5 whitespace-nowrap tooltip"
                     data-tip="The audio file is gone from disk. Remove this entry."

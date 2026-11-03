@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import threading
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
 from mediafile import MediaFile
@@ -13,8 +14,10 @@ from ..lyrics.service import LyricsService
 from . import analysis, animated, covers
 from .audio import channel_count
 from .beets_engine import AUDIO_EXTENSIONS, BeetsEngine
+from .storage import root_status, volume_online
 from .tracks import SIDECAR_EXTS, cluster_duplicates, dup_key, item_path, quality
 
+BACKEND_DIR = Path(__file__).resolve().parents[2]
 CHUNK = 25
 MAX_FILES = 5000
 
@@ -27,10 +30,11 @@ class InboxService:
 
     # ---- scanning ------------------------------------------------------------
     @staticmethod
-    def _walk(root: str) -> tuple[list[str], dict[str, dict[str, str]]]:
+    def _walk(root: str, skipped_videos: list[str] | None = None) -> tuple[list[str], dict[str, dict[str, str]]]:
         """Audio files plus, per folder, the animated cover videos ({dir: {"square"|"tall": path}})."""
         found: list[str] = []
         videos: dict[str, dict[str, str]] = {}
+        skipped_videos = skipped_videos if skipped_videos is not None else []
         for base, _dirs, files in os.walk(root):
             for name in sorted(files):
                 ext = os.path.splitext(name)[1].lower()
@@ -40,7 +44,9 @@ class InboxService:
                     kind = animated.shape(info)
                     if kind:
                         videos.setdefault(base, {}).setdefault(kind, path)
-                    if kind or ext != ".mp4" or (info and not info["audio"]):
+                    if kind or ext != ".mp4" or (info and (not info["audio"] or info["moving_video"])):
+                        if info and info["audio"] and info["moving_video"]:
+                            skipped_videos.append(path)  # a music video, not a song
                         continue
                 if ext in AUDIO_EXTENSIONS:
                     found.append(path)
@@ -75,9 +81,11 @@ class InboxService:
         return row
 
     def scan(self, root: str) -> dict:
-        if not os.path.isdir(root):
-            raise NotADirectoryError(f"Input folder not found: {root}")
-        paths, videos = self._walk(root)
+        status = root_status(root)
+        if not status["ok"]:
+            raise NotADirectoryError(f"Input folder unavailable ({status['reason']}): {root}")
+        skipped_videos: list[str] = []
+        paths, videos = self._walk(root, skipped_videos)
         with ThreadPoolExecutor(max_workers=8) as pool:
             rows = list(pool.map(lambda p: self._read(p, root), paths))
         for row in rows:
@@ -87,7 +95,7 @@ class InboxService:
         counts: dict[str, int] = {}
         for row in rows:
             counts[row["status"]] = counts.get(row["status"], 0) + 1
-        return {"root": root, "files": rows, "counts": counts, "truncated": len(paths) >= MAX_FILES}
+        return {"root": root, "files": rows, "counts": counts, "truncated": len(paths) >= MAX_FILES, "videos_skipped": len(skipped_videos)}
 
     def _mark_duplicates(self, rows: list[dict]) -> None:
         """Flag files already in the library, and the lower-quality copies among identical inbox files."""
@@ -115,16 +123,26 @@ class InboxService:
         scan = self.scan(root)
         wanted = set(files) if files else None
         rows = [r for r in scan["files"] if wanted is None or r["path"] in wanted]
+        output = root_status(settings.output_path, must_exist=False)
+        if not output["ok"]:
+            raise RuntimeError(f"Output folder unavailable ({output['reason']}): {output['path'] or 'not set'}")
+        surround = root_status(settings.multichannel_path, must_exist=False) if settings.multichannel_path.strip() else None
         action = settings.duplicate_action
         queue: list[str] = []
-        skipped_dup = replaced = corrupt = 0
+        skipped_dup = replaced = corrupt = offline = 0
         for row in rows:
-            if row["status"] == "corrupt":
+            if surround and not surround["ok"] and row["channels"] > 2 and row["status"] != "corrupt":
+                offline += 1
+                job.write(f"[Waiting] {row['rel']} (5.1 folder unavailable: {surround['reason']} — reconnect it and import again)")
+            elif row["status"] == "corrupt":
                 corrupt += 1
                 job.write(f"[Skipped] {row['rel']} (unreadable / corrupt audio)")
             elif row["status"] in ("in_library", "in_inbox") and action == "skip":
                 skipped_dup += 1
                 job.write(f"[Duplicate] {row['rel']} (already {'in the library' if row['status'] == 'in_library' else 'present in the inbox'})")
+            elif row["status"] == "in_library" and action == "replace" and not volume_online(row["dup_of"]["path"]):
+                skipped_dup += 1
+                job.write(f"[Duplicate] {row['rel']} (the library copy is on a drive that isn't connected, so it can't be replaced)")
             elif row["status"] == "in_library" and action == "replace":
                 self._replace(row, job)
                 replaced += 1
@@ -154,6 +172,8 @@ class InboxService:
             parts.append(f"{replaced} replaced")
         if corrupt:
             parts.append(f"{corrupt} unreadable")
+        if offline:
+            parts.append(f"{offline} surround file(s) left in the inbox (5.1 folder offline)")
         job.message = ", ".join(parts)
         job.write(f"[Done] {job.message}")
 
@@ -165,7 +185,7 @@ class InboxService:
     def _run_beets(self, job: Job, paths: list[str]) -> None:
         process = subprocess.Popen(
             [sys.executable, "-m", "beets", "import", "-q", "-s", *paths],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env={**os.environ, "BEETSDIR": str(BEETS_DIR)},
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env={**os.environ, "BEETSDIR": str(BEETS_DIR), "PYTHONPATH": os.pathsep.join(filter(None, [str(BACKEND_DIR), os.environ.get("PYTHONPATH")]))},
         )
         job.on_cancel = process.terminate
 

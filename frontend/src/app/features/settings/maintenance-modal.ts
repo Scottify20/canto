@@ -7,6 +7,7 @@ import { formatBytes } from '../../shared/format';
 import { Icon } from '../../shared/icon';
 import { InfoTip } from '../../shared/info-tip';
 import { Modal } from '../../shared/modal';
+import { LibraryBackupSection } from './library-backup-section';
 
 const ORDER = ['missing', 'tmp', 'empty_dirs', 'orphans', 'db_backups', 'http_cache'] as const;
 const TIPS: Record<string, string> = {
@@ -20,11 +21,12 @@ const TIPS: Record<string, string> = {
 
 @Component({
   selector: 'app-maintenance-modal',
-  imports: [InfoTip, Modal, Icon],
+  imports: [InfoTip, Modal, Icon, LibraryBackupSection],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-modal title="Cleanup & maintenance" icon="clean" widthClass="max-w-2xl" (closed)="closed.emit()">
       <p class="text-sm opacity-80 mb-3">Tick what to clean, then press <b>Clean selected</b>. <app-info-tip text="Canto already removes temporary files whenever the engine starts or stops. Use this window for everything else. Nothing is deleted until you tick it and press Clean selected." /></p>
+      <app-library-backup-section />
       @if (scan(); as sc) {
         <ul class="flex flex-col gap-2">
           @for (key of order; track key) {
