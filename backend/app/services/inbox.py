@@ -14,7 +14,7 @@ from ..lyrics.service import LyricsService
 from . import analysis, animated, covers
 from .audio import channel_count
 from .beets_engine import AUDIO_EXTENSIONS, BeetsEngine
-from .storage import root_status, volume_online
+from .storage import low_space_message, root_status, volume_online
 from .tracks import SIDECAR_EXTS, cluster_duplicates, dup_key, item_path, quality
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -127,6 +127,7 @@ class InboxService:
         if not output["ok"]:
             raise RuntimeError(f"Output folder unavailable ({output['reason']}): {output['path'] or 'not set'}")
         surround = root_status(settings.multichannel_path, must_exist=False) if settings.multichannel_path.strip() else None
+        surround_low = low_space_message(settings, ("multichannel",)) if surround else None
         action = settings.duplicate_action
         queue: list[str] = []
         skipped_dup = replaced = corrupt = offline = 0
@@ -134,6 +135,9 @@ class InboxService:
             if surround and not surround["ok"] and row["channels"] > 2 and row["status"] != "corrupt":
                 offline += 1
                 job.write(f"[Waiting] {row['rel']} (5.1 folder unavailable: {surround['reason']} — reconnect it and import again)")
+            elif surround_low and row["channels"] > 2 and row["status"] != "corrupt":
+                offline += 1
+                job.write(f"[Waiting] {row['rel']} ({surround_low})")
             elif row["status"] == "corrupt":
                 corrupt += 1
                 job.write(f"[Skipped] {row['rel']} (unreadable / corrupt audio)")
@@ -155,10 +159,19 @@ class InboxService:
         job.total = len(queue)
         before = {i.id for i in self.engine.lib.items()}
         job.message = "Importing…"
+        paused = 0
         for start in range(0, len(queue), CHUNK):
             if job.cancelled:
                 break
-            self._run_beets(job, queue[start:start + CHUNK])
+            chunk = queue[start:start + CHUNK]
+            needed = sum(os.path.getsize(p) for p in chunk if os.path.exists(p))
+            low = low_space_message(settings, ("output",), needed)
+            if low:
+                job.write(f"[Paused] {low}")
+                job.message = low
+                paused = len(queue) - start
+                break
+            self._run_beets(job, chunk)
             job.done = min(job.total, len({i.id for i in self.engine.lib.items()} - before))
         new_items = [i for i in self.engine.lib.items() if i.id not in before]
         self._post_process(job, new_items)
@@ -172,6 +185,8 @@ class InboxService:
             parts.append(f"{replaced} replaced")
         if corrupt:
             parts.append(f"{corrupt} unreadable")
+        if paused:
+            parts.append(f"paused with {paused} file(s) waiting: not enough free space")
         if offline:
             parts.append(f"{offline} surround file(s) left in the inbox (5.1 folder offline)")
         job.message = ", ".join(parts)

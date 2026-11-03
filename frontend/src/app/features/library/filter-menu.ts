@@ -34,6 +34,7 @@ const GROUPS: { title: string; items: { value: LibraryFilter; label: string }[] 
     ],
   },
   { title: 'Covers', items: [{ value: 'animated', label: 'Has animated cover' }, { value: 'no-animated', label: 'No animated cover' }] },
+  { title: 'Metadata review', items: [{ value: 'meta-none', label: 'Metadata not fetched' }, { value: 'meta-pending', label: 'Fetched, not reviewed' }, { value: 'meta-reviewed', label: 'Fetched & reviewed' }] },
   { title: 'Problems', items: [{ value: 'duplicates', label: 'Duplicates' }, { value: 'missing', label: 'File missing on disk' }] },
 ];
 

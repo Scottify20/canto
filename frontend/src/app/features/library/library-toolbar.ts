@@ -62,8 +62,10 @@ import { Icon } from '../../shared/icon';
           <span class="text-sm opacity-80 tooltip tooltip-bottom max-sm:hidden" data-tip="Shift+click: select a range · Ctrl+click: add or remove one · Ctrl+A: select all shown">{{ lib.selected().size }} selected</span>
           <span class="text-sm opacity-80 sm:hidden">{{ lib.selected().size }} selected</span>
           <button class="btn btn-xs btn-ghost" (click)="lib.clearSelection()">Deselect</button>
+          <button class="btn btn-xs btn-ghost tooltip tooltip-bottom" data-tip="Select every song in the whole library that is not selected now" (click)="lib.invertSelection()">Invert</button>
         } @else if (lib.filtered().length) {
           <button class="btn btn-xs btn-ghost" (click)="lib.selectAllFiltered()">Select all {{ lib.filtered().length }}</button>
+          <button class="btn btn-xs btn-ghost" (click)="lib.invertSelection()">Invert</button>
         }
         <div class="dropdown dropdown-end">
           <button tabindex="0" class="btn btn-sm btn-error btn-soft" [disabled]="jobs.running()"><app-icon name="trash" /> Remove <app-icon name="down" [size]="14" /></button>

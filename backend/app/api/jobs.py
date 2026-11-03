@@ -5,6 +5,7 @@ from .. import deps
 from ..core.jobs import jobs
 from ..lyrics.service import LyricsOptions
 from ..services import analysis
+from .common import ensure_space, space_guard
 
 router = APIRouter(prefix="/api")
 
@@ -33,6 +34,7 @@ class IdsRequest(BaseModel):
 
 
 def _start(kind, target):
+    ensure_space(("output",) if kind == "import" else ("output", "multichannel"))
     try:
         return jobs.start(kind, target).snapshot()
     except RuntimeError as exc:
@@ -48,6 +50,11 @@ def start_import(body: ImportRequest):
 def start_lyrics(body: LyricsBatchRequest):
     opts = LyricsOptions(body.overwrite_lrc, body.overwrite_ttml, body.embed)
     return _start("lyrics", lambda job: deps.lyrics.run_batch(job, body.ids, opts))
+
+
+@router.post("/match/batch")
+def start_match(body: IdsRequest):
+    return _start("match", lambda job: deps.match_store.run_batch(job, body.ids, body.force))
 
 
 @router.post("/analyze")
@@ -94,7 +101,7 @@ def start_covers(body: IdsRequest):
     return _start("covers", lambda job: deps.tracks.fetch_missing_covers(job, body.ids, body.force))
 
 
-@router.post("/lyrics/track")
+@router.post("/lyrics/track", dependencies=[space_guard()])
 def fetch_single_lyrics(body: LyricsTrackRequest):
     try:
         result = deps.lyrics.process_single(body.id, LyricsOptions(body.overwrite_lrc, body.overwrite_ttml, body.embed))

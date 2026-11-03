@@ -6,6 +6,7 @@ system disk, and treating its files as deleted would wipe the library entries.
 """
 import os
 import re
+import shutil
 
 _REMOVABLE = re.compile(r"^(/mnt/[^/]+|/media/[^/]+/[^/]+|/run/media/[^/]+/[^/]+|/Volumes/[^/]+)")
 
@@ -38,3 +39,51 @@ def root_status(path: str, must_exist: bool = True) -> dict:
     if must_exist:
         return {"path": full, "ok": False, "reason": "folder not found"}
     return {"path": full, "ok": True, "reason": "will be created"}
+
+
+GB = 1024 ** 3
+
+
+def _existing_parent(path: str) -> str | None:
+    full = os.path.abspath(os.path.expanduser(path))
+    while full and not os.path.exists(full):
+        parent = os.path.dirname(full)
+        if parent == full:
+            return None
+        full = parent
+    return full
+
+
+def disk_usage(path: str) -> dict | None:
+    """{"total", "free", "used"} in bytes for the drive holding `path`, or None when it can't be read."""
+    if not path.strip() or not volume_online(path):
+        return None
+    base = _existing_parent(path)
+    try:
+        usage = shutil.disk_usage(base) if base else None
+    except OSError:
+        return None
+    return {"total": usage.total, "free": usage.free, "used": usage.used} if usage else None
+
+
+def storage_report(settings) -> list[dict]:
+    """Space on each library drive (output and 5.1 folder), flagged `low` below the configured threshold."""
+    limit = int(max(0.0, settings.min_free_gb) * GB)
+    report = []
+    for key, label, path in (("output", "Library (output) folder", settings.output_path), ("multichannel", "5.1 / surround folder", settings.multichannel_path)):
+        if not path.strip():
+            continue
+        usage = disk_usage(path)
+        report.append({"key": key, "label": label, "path": os.path.abspath(os.path.expanduser(path)), "online": usage is not None,
+                       "low": bool(usage and usage["free"] < limit), **(usage or {"total": 0, "free": 0, "used": 0})})
+    return report
+
+
+def low_space_message(settings, keys: tuple[str, ...] = ("output", "multichannel"), needed: int = 0) -> str | None:
+    """A human message when a drive in `keys` would drop under the free-space limit, else None."""
+    limit = int(max(0.0, settings.min_free_gb) * GB)
+    for entry in storage_report(settings):
+        if entry["key"] in keys and entry["online"] and entry["free"] - needed < limit:
+            left = entry["free"] / GB
+            return f"Paused: only {left:.1f} GB left on {entry['path']} (limit {settings.min_free_gb:g} GB). Free up space or lower the limit in Settings → Storage."
+    return None

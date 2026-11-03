@@ -244,7 +244,7 @@ export class SwipeReviewModal implements OnDestroy {
     const d = this.stack().find((x) => x.id === id);
     if (!d) return;
     this.stack.update((s) => s.filter((x) => x.id !== id));
-    if (!d.apply) { this.lib.dismiss(id); return; }
+    if (!d.apply) { this.lib.dismiss(id, true); return; }
     this.inflight.update((l) => [...l, id]);
     void this.lib.applyProposal(id).finally(() => this.inflight.update((l) => l.filter((x) => x !== id)));
   }

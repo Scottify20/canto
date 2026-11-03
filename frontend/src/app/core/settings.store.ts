@@ -1,7 +1,7 @@
 import { Capacitor, SystemBars, SystemBarsStyle } from '@capacitor/core';
-import { Injectable, effect, inject, signal } from '@angular/core';
+import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { ApiService, errorMessage } from './api.service';
-import { COLUMNS, ColumnKey, DuplicateAction, ProviderState, Settings, SettingsUpdate } from './models';
+import { COLUMNS, ColumnKey, DuplicateAction, ProviderState, RunWhere, Settings, SettingsUpdate, StorageEntry, TaskKind } from './models';
 import { ToastService } from './toast.service';
 
 const STORAGE_KEY = 'canto_ui_v3';
@@ -27,6 +27,16 @@ export class SettingsStore {
   /** Whether each configured folder is reachable (a drive may be unplugged) */
   readonly folders = signal<Settings['folders'] | null>(null);
   readonly multichannelGainOffset = signal(0);
+  readonly minFreeGb = signal(4);
+  readonly storage = signal<StorageEntry[]>([]);
+  readonly lowSpace = computed(() => this.storage().filter((s) => s.low));
+
+  /** Where each kind of online lookup is driven from. Per device, so a phone and a PC can differ. */
+  readonly runAllOnServer = signal(true);
+  readonly runWhere = signal<Record<TaskKind, RunWhere>>({ metadata: 'server', lyrics: 'server', covers: 'server', analysis: 'server' });
+  runsOnServer(task: TaskKind): boolean {
+    return this.runAllOnServer() || this.runWhere()[task] === 'server';
+  }
   readonly hasDiscogsToken = signal(false);
   readonly providers = signal<ProviderState[]>([]);
 
@@ -56,6 +66,8 @@ export class SettingsStore {
         pageSize: this.pageSize(),
         theme: this.theme(),
         uiScale: this.uiScale(),
+        runAllOnServer: this.runAllOnServer(),
+        runWhere: this.runWhere(),
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
       document.documentElement.setAttribute('data-theme', snapshot.theme);
@@ -79,6 +91,10 @@ export class SettingsStore {
       if (Array.isArray(c.columns)) this.visibleColumns.set(c.columns.filter((k: ColumnKey) => valid.has(k)));
       this.pageSize.set(c.pageSize ?? 100);
       this.theme.set(c.theme === 'light' ? 'light' : 'dark');
+      this.runAllOnServer.set(c.runAllOnServer !== false);
+      if (c.runWhere && typeof c.runWhere === 'object') {
+        this.runWhere.update((cur) => Object.fromEntries(Object.entries(cur).map(([k, v]) => [k, c.runWhere[k] === 'device' ? 'device' : v])) as Record<TaskKind, RunWhere>);
+      }
       const scale = Number(c.uiScale);
       if (scale >= 70 && scale <= 160) this.uiScale.set(Math.round(scale));
     } catch {
@@ -89,7 +105,10 @@ export class SettingsStore {
   /** Re-check folder availability; resolves true when a folder has just come back online. */
   async refreshFolders(): Promise<boolean> {
     try {
-      const next = (await this.api.getSettings()).folders ?? null;
+      const fresh = await this.api.getSettings();
+      this.storage.set(fresh.storage ?? []);
+      this.minFreeGb.set(fresh.min_free_gb ?? 4);
+      const next = fresh.folders ?? null;
       const was = this.folders();
       this.folders.set(next);
       return !!was && !!next && (Object.keys(next) as ('input' | 'output' | 'multichannel')[]).some((k) => !was[k]?.ok && next[k]?.ok);
@@ -115,6 +134,8 @@ export class SettingsStore {
     this.duplicateAction.set(s.duplicate_action);
     this.pruneEmptyDirs.set(s.prune_empty_dirs);
     this.folders.set(s.folders ?? null);
+    this.storage.set(s.storage ?? []);
+    this.minFreeGb.set(s.min_free_gb ?? 4);
     this.multichannelPath.set(s.multichannel_path ?? '');
     this.multichannelGainOffset.set(s.multichannel_gain_offset ?? 0);
     this.hasDiscogsToken.set(s.has_discogs_token);

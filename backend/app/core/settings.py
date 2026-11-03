@@ -30,6 +30,8 @@ class Settings:
     # applied on top of the stereo-downmix measurement so they sit level with stereo music.
     multichannel_path: str = ""
     multichannel_gain_offset: float = 0.0
+    # Writing actions pause when a library drive has less than this much space left (GB).
+    min_free_gb: float = 4.0
     # Lyrics providers: id -> {"enabled": bool, "keys": {field: value}}; order = priority.
     lyrics_order: list = field(default_factory=list)
     lyrics_providers: dict = field(default_factory=dict)

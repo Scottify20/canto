@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, v
 import { JobStore } from '../../core/job.store';
 import { Icon } from '../../shared/icon';
 
-const LABELS = { import: 'Importing', lyrics: 'Fetching lyrics', analyze: 'Analysing audio', covers: 'Fetching covers' } as const;
+const LABELS = { import: 'Importing', lyrics: 'Fetching lyrics', analyze: 'Analysing audio', covers: 'Fetching covers', match: 'Matching metadata' } as const;
 
 @Component({
   selector: 'app-job-console',

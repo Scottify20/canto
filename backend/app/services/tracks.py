@@ -117,6 +117,8 @@ class TrackService:
             "bpm": item.get("bpm") or "",
             "rg_track_gain": item.get("rg_track_gain", ""),
             "initial_key": item.get("initial_key", ""),
+            "meta_fetched": bool(item.get("meta_fetched")),
+            "meta_reviewed": bool(item.get("meta_reviewed")),
             "path": path,
             "exists": exists,
             "offline": not exists and not volume_online(path),

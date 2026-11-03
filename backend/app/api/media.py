@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from .. import deps
-from .common import guard
+from .common import guard, space_guard
 
 router = APIRouter(prefix="/api")
 MAX_UPLOAD = 25 * 1024 * 1024
@@ -42,7 +42,7 @@ def cover_info(item_id: int):
     return guard(lambda: deps.tracks.cover_info(item_id))
 
 
-@router.post("/tracks/{item_id}/cover")
+@router.post("/tracks/{item_id}/cover", dependencies=[space_guard()])
 async def upload_cover(item_id: int, request: Request):
     data = await request.body()
     if not data or len(data) > MAX_UPLOAD:
@@ -65,7 +65,7 @@ def animated_list(item_id: int):
     return guard(lambda: deps.tracks.animated_list(item_id))
 
 
-@router.post("/tracks/{item_id}/animated")
+@router.post("/tracks/{item_id}/animated", dependencies=[space_guard()])
 async def upload_animated(item_id: int, request: Request, name: str = "cover.mp4", shape: str | None = None):
     """Raw video body. The shape (tall/square) is detected from the picture unless `shape` is given."""
     ext = os.path.splitext(name)[1] or ".mp4"
@@ -109,7 +109,7 @@ def cover_candidates(item_id: int):
     return guard(lambda: deps.tracks.cover_candidates(item_id))
 
 
-@router.post("/tracks/{item_id}/cover/from-url")
+@router.post("/tracks/{item_id}/cover/from-url", dependencies=[space_guard()])
 def cover_from_url(item_id: int, body: CoverUrl):
     return guard(lambda: deps.tracks.set_cover_from_url(item_id, body.url))
 

@@ -17,7 +17,7 @@ import { Proposal, TAG_FIELDS, TAG_LABELS, TagField, Track } from '../../core/mo
         }
       </select>
       <div class="grow"></div>
-      <button class="btn btn-xs btn-ghost" (click)="lib.dismiss(track().id)">Dismiss</button>
+      <button class="btn btn-xs btn-ghost" (click)="lib.dismiss(track().id, true)">Dismiss</button>
       <button class="btn btn-xs btn-success" [disabled]="lib.busy()[track().id] === 'save'" (click)="lib.applyProposal(track().id)">
         @if (lib.busy()[track().id] === 'save') { <span class="loading loading-spinner loading-xs"></span> }
         Apply selected

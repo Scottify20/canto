@@ -7,8 +7,8 @@ from .. import deps
 from ..core.jobs import jobs
 from ..services.filesystem import list_directory
 from ..services.health import system_health
-from ..services.storage import root_status
-from .common import guard
+from ..services.storage import root_status, storage_report
+from .common import guard, space_guard
 
 router = APIRouter(prefix="/api")
 jobs.on_finish.append(lambda job: deps.library_backup.schedule() if job.status == "done" else None)
@@ -37,6 +37,7 @@ class SettingsUpdate(BaseModel):
     prune_empty_dirs: bool | None = None
     multichannel_path: str | None = None
     multichannel_gain_offset: float | None = Field(None, ge=-24, le=24)
+    min_free_gb: float | None = Field(None, ge=0, le=100000)
     lyrics_order: list[str] | None = None
     providers: list[ProviderUpdate] | None = None
 
@@ -65,7 +66,7 @@ def settings_payload() -> dict:
         "input_path": s.input_path, "output_path": s.output_path, "folder_structure": s.folder_structure,
         "tolerance": s.tolerance, "delete_originals": s.delete_originals, "duplicate_action": s.duplicate_action,
         "prune_empty_dirs": s.prune_empty_dirs, "multichannel_path": s.multichannel_path,
-        "multichannel_gain_offset": s.multichannel_gain_offset, "has_discogs_token": bool(s.discogs_token),
+        "multichannel_gain_offset": s.multichannel_gain_offset, "min_free_gb": s.min_free_gb, "storage": storage_report(s), "has_discogs_token": bool(s.discogs_token),
         "providers": deps.lyrics.provider_states(),
         "folders": {
             "input": root_status(s.input_path), "output": root_status(s.output_path, must_exist=False),
@@ -122,10 +123,26 @@ def track_details(item_id: int):
 
 @router.post("/match")
 def fetch_match(body: MatchRequest):
-    return {"status": "success", "candidates": guard(lambda: deps.matcher.propose(body.id))}
+    return {"status": "success", "candidates": guard(lambda: deps.match_store.lookup(body.id))}
 
 
-@router.post("/tags/update")
+class ResolveRequest(BaseModel):
+    id: int
+    reviewed: bool = False
+
+
+@router.get("/match/proposals")
+def match_proposals():
+    return {"proposals": {str(k): v for k, v in deps.match_store.all().items()}}
+
+
+@router.post("/match/resolve")
+def match_resolve(body: ResolveRequest):
+    guard(lambda: deps.match_store.resolve(body.id, body.reviewed))
+    return {"track": guard(lambda: deps.tracks.get_track(body.id))}
+
+
+@router.post("/tags/update", dependencies=[space_guard()])
 def update_tags(body: TagUpdate):
     track = guard(lambda: deps.tracks.update_tags(body.id, body.tags))
     deps.library_backup.schedule()

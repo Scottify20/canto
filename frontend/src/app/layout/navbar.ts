@@ -96,6 +96,18 @@ import { Icon } from '../shared/icon';
                 </button>
               </li>
               <li>
+                <button (click)="storage.emit(); close($event)">
+                  <app-icon name="disc" />
+                  Storage &amp; space limit
+                </button>
+              </li>
+              <li>
+                <button (click)="where.emit(); close($event)">
+                  <app-icon name="sliders" />
+                  Where lookups run
+                </button>
+              </li>
+              <li>
                 <button (click)="maintenance.emit(); close($event)">
                   <app-icon name="clean" />
                   Cleanup
@@ -153,6 +165,8 @@ export class Navbar {
   structure = output<void>();
   sources = output<void>();
   maintenance = output<void>();
+  storage = output<void>();
+  where = output<void>();
   remote = output<void>();
 
   /** Closes the dropdown after picking an entry (daisyUI dropdowns stay open while focused) */

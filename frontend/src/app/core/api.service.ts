@@ -176,6 +176,15 @@ export class ApiService {
   startLyrics(ids: number[] | null, options: LyricsOptions) {
     return this.post<Job>('/lyrics', { ids, ...options });
   }
+  startMatch(ids: number[] | null, force = false) {
+    return this.post<Job>('/match/batch', { ids, force });
+  }
+  matchProposals() {
+    return this.get<{ proposals: Record<string, MatchCandidate[]> }>('/match/proposals').then((r) => r.proposals);
+  }
+  resolveMatch(id: number, reviewed: boolean) {
+    return this.post<{ track: Track }>('/match/resolve', { id, reviewed }).then((r) => r.track);
+  }
   startAnalysis(ids: number[] | null, force = false) {
     return this.post<Job>('/analyze', { ids, force });
   }

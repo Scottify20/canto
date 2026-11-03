@@ -17,6 +17,8 @@ import { LibraryToolbar } from './features/library/library-toolbar';
 import { RemoveModal } from './features/library/remove-modal';
 import { OpenEdit } from './features/library/track-row';
 import { LyricsPanel } from './features/lyrics/lyrics-panel';
+import { StorageModal } from './features/settings/storage-modal';
+import { TaskLocationModal } from './features/settings/task-location-modal';
 import { MaintenanceModal } from './features/settings/maintenance-modal';
 import { RemoteModal } from './features/settings/remote-modal';
 import { SourcesModal } from './features/settings/sources-modal';
@@ -26,13 +28,13 @@ import { Icon } from './shared/icon';
 import { ToastContainer } from './shared/toast-container';
 
 type View = 'library' | 'inbox' | 'setup';
-type Dialog = 'sources' | 'structure' | 'maintenance' | 'duplicates' | 'swipe' | 'remote' | null;
+type Dialog = 'sources' | 'structure' | 'maintenance' | 'storage' | 'where' | 'duplicates' | 'swipe' | 'remote' | null;
 
 @Component({
   selector: 'app-root',
   imports: [
     NgTemplateOutlet, Navbar, ImportPanel, InboxPanel, LyricsPanel, JobConsole, LibraryToolbar, LibraryTable, Icon, ToastContainer,
-    EditModal, RemoveModal, DuplicatesModal, SwipeReviewModal, SourcesModal, StructureModal, MaintenanceModal, RemoteModal,
+    EditModal, RemoveModal, DuplicatesModal, SwipeReviewModal, SourcesModal, StructureModal, MaintenanceModal, RemoteModal, StorageModal, TaskLocationModal,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -52,7 +54,7 @@ type Dialog = 'sources' | 'structure' | 'maintenance' | 'duplicates' | 'swipe' |
     </ng-template>
     <div class="h-dvh flex flex-col overflow-hidden">
       @if (!maximized()) {
-        <app-navbar [online]="online()" [checks]="checks()" (structure)="dialog.set('structure')" (sources)="dialog.set('sources')" (maintenance)="dialog.set('maintenance')" (remote)="dialog.set('remote')">
+        <app-navbar [online]="online()" [checks]="checks()" (structure)="dialog.set('structure')" (sources)="dialog.set('sources')" (maintenance)="dialog.set('maintenance')" (storage)="dialog.set('storage')" (where)="dialog.set('where')" (remote)="dialog.set('remote')">
           <div navCenter class="flex items-center gap-3 xl:gap-8 min-w-0 w-full justify-center max-sm:hidden">
             <div role="tablist" class="tabs tabs-box tabs-sm p-1 shrink-0"><ng-container *ngTemplateOutlet="tabsTpl" /></div>
             <div class="items-center gap-2 max-xl:hidden xl:flex"><ng-container *ngTemplateOutlet="statsTpl; context: { compact: true }" /></div>
@@ -75,6 +77,11 @@ type Dialog = 'sources' | 'structure' | 'maintenance' | 'duplicates' | 'swipe' |
         </app-navbar>
       }
 
+      @if (settings.lowSpace().length) {
+        <button class="glass-panel shrink-0 px-3 py-2 px-3 py-2 text-sm flex items-center gap-2 text-warning anim-slide" (click)="dialog.set('storage')">
+            <app-icon name="warn" /> Low disk space on {{ lowNames() }}: imports and file changes are paused. Click for details.
+        </button>
+      }
       <div class="flex-1 min-h-0 flex flex-col gap-2 lg:grid lg:gap-4 lg:grid-rows-[minmax(0,1fr)]" [class]="layoutClass()">
         @if (!maximized()) {
           <aside class="flex-col gap-4 min-w-0 min-h-0 overflow-y-auto overflow-x-hidden [&>*]:shrink-0 [&>*]:min-w-0 max-lg:order-2 max-lg:flex-1" [class]="view() === 'setup' ? 'flex' : 'hidden lg:flex'">
@@ -110,6 +117,8 @@ type Dialog = 'sources' | 'structure' | 'maintenance' | 'duplicates' | 'swipe' |
       @case ('sources') { <app-sources-modal (closed)="dialog.set(null)" /> }
       @case ('structure') { <app-structure-modal (closed)="dialog.set(null)" /> }
       @case ('maintenance') { <app-maintenance-modal (closed)="dialog.set(null)" /> }
+      @case ('storage') { <app-storage-modal (closed)="dialog.set(null)" /> }
+      @case ('where') { <app-task-location-modal (closed)="dialog.set(null)" /> }
       @case ('remote') { <app-remote-modal (closed)="dialog.set(null)" /> }
       @case ('swipe') { <app-swipe-review-modal (closed)="dialog.set(null)" /> }
       @case ('duplicates') { <app-duplicates-modal (closed)="dialog.set(null)" /> }
@@ -119,7 +128,8 @@ type Dialog = 'sources' | 'structure' | 'maintenance' | 'duplicates' | 'swipe' |
 })
 export class App implements OnInit {
   private api = inject(ApiService);
-  private settings = inject(SettingsStore);
+  protected settings = inject(SettingsStore);
+  protected lowNames = () => this.settings.lowSpace().map((d) => d.label).join(' and ');
   private jobs = inject(JobStore);
   lib = inject(LibraryStore);
   inbox = inject(InboxStore);
@@ -161,6 +171,7 @@ export class App implements OnInit {
     await this.settings.hydrateFromBackend();
     await this.lib.load();
     await this.jobs.resume();
+    void this.lib.loadProposals();
     if (!this.lib.tracks().length && this.settings.inputPath()) this.view.set('inbox');
     void this.inbox.refresh(true);
   }

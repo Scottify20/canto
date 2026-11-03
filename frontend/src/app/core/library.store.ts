@@ -59,6 +59,9 @@ export class LibraryStore {
         case 'no-cover': return !t.has_cover;
         case 'missing': return !t.exists && !t.offline;
         case 'duplicates': return t.dup_group !== null;
+        case 'meta-reviewed': return t.meta_reviewed;
+        case 'meta-pending': return t.meta_fetched && !t.meta_reviewed;
+        case 'meta-none': return !t.meta_fetched;
         case 'review': return !!proposals[t.id];
         default: return true;
       }
@@ -99,7 +102,11 @@ export class LibraryStore {
   constructor() {
     this.jobs.onChange = (finished) => {
       void this.load(true);
-      if (finished) this.bumpCovers();
+      if (finished) {
+        this.bumpCovers();
+        void this.settings.refreshFolders();
+        if (this.jobs.job()?.kind === 'match') void this.loadProposals(true);
+      }
     };
   }
 
@@ -167,6 +174,11 @@ export class LibraryStore {
   }
   selectAllFiltered() { this.selected.set(new Set(this.filtered().map((t) => t.id))); }
   clearSelection() { this.selected.set(new Set()); }
+  /** Flip the selection across the whole library, not just the rows that pass the filters. */
+  invertSelection() {
+    const current = this.selected();
+    this.selected.set(new Set(this.tracks().filter((t) => !current.has(t.id)).map((t) => t.id)));
+  }
 
   /** Bumped whenever a cover changes so <img> URLs bypass the browser cache. */
   readonly coverVersion = signal(0);
@@ -207,8 +219,33 @@ export class LibraryStore {
       return p ? { ...all, [id]: { ...p, accept: { ...p.accept, [field]: !p.accept[field] } } } : all;
     });
   }
-  dismiss(id: number) {
+  /** `reviewed` records that the user looked at the proposal (accepted or rejected); skipping it for later leaves it unreviewed. */
+  dismiss(id: number, reviewed = false) {
+    const had = !!this.proposals()[id];
     this.proposals.update((all) => { const n = { ...all }; delete n[id]; return n; });
+    if (had) void this.api.resolveMatch(id, reviewed).then((t) => this.patch(t)).catch(() => undefined);
+  }
+
+  /** Proposals are kept on the server, so lookups made earlier (or from another device) come back after a reload. */
+  async loadProposals(announce = false) {
+    try {
+      const stored = await this.api.matchProposals();
+      const byId = new Map(this.tracks().map((t) => [t.id, t]));
+      const next: Record<number, Proposal> = { ...this.proposals() };
+      let added = 0;
+      for (const [key, candidates] of Object.entries(stored)) {
+        const id = Number(key);
+        const track = byId.get(id);
+        if (!track || next[id]) continue;
+        const proposal = this.buildProposal(track, candidates);
+        if (this.changedFields(track, proposal).length) { next[id] = proposal; added++; }
+        else void this.api.resolveMatch(id, false).catch(() => undefined);
+      }
+      this.proposals.set(next);
+      if (announce) this.toast.success(added ? `Review ${this.pendingCount()} proposed change(s)` : 'Metadata lookup finished: nothing to change');
+    } catch {
+      /* offline */
+    }
   }
 
   async findMatch(track: Track, announce = true) {
@@ -242,7 +279,7 @@ export class LibraryStore {
     this.setBusy(id, 'save');
     try {
       this.patch(await this.api.updateTags(id, payload));
-      this.dismiss(id);
+      this.dismiss(id, true);
     } catch (e) {
       this.toast.error(errorMessage(e));
     } finally {
@@ -269,6 +306,12 @@ export class LibraryStore {
   cancelBatch() { this.batchCancelled = true; }
 
   async fetchMatches(ids: number[]) {
+    if (this.settings.runsOnServer('metadata')) {
+      const skip = new Set(Object.keys(this.proposals()).map(Number));
+      const todo = ids.filter((id) => !skip.has(id));
+      if (!todo.length) { this.toast.info('Nothing to fetch'); return; }
+      return this.jobs.start(() => this.api.startMatch(todo));
+    }
     const byId = new Map(this.tracks().map((t) => [t.id, t]));
     const todo = ids.filter((id) => byId.has(id) && !this.proposals()[id]);
     if (!todo.length) { this.toast.info('Nothing to fetch'); return; }
@@ -312,15 +355,51 @@ export class LibraryStore {
   }
 
   startLyricsBatch(ids: number[] | null) {
+    if (!this.settings.runsOnServer('lyrics')) {
+      return this.runOnDevice('Fetching lyrics', ids, async (id) => {
+        const track = this.tracks().find((t) => t.id === id);
+        if (track) await this.fetchLyrics(track);
+      });
+    }
     return this.jobs.start(() => this.api.startLyrics(ids, this.lyricsOptions()));
   }
 
   startAnalysis(ids: number[] | null, force = this.settings.reanalyze()) {
+    if (!this.settings.runsOnServer('analysis')) {
+      return this.runOnDevice('Analysing', ids, (id) => this.runJobToEnd(() => this.api.startAnalysis([id], force)));
+    }
     return this.jobs.start(() => this.api.startAnalysis(ids, force));
   }
 
   startCovers(ids: number[] | null, force = false) {
+    if (!this.settings.runsOnServer('covers')) {
+      return this.runOnDevice('Fetching covers', ids, (id) => this.runJobToEnd(() => this.api.startCovers([id], force)));
+    }
     return this.jobs.start(() => this.api.startCovers(ids, force));
+  }
+
+  /** "This device" mode: the app drives one track at a time, so the work stops when the app is closed. */
+  private async runOnDevice(label: string, ids: number[] | null, step: (id: number) => Promise<void>) {
+    const todo = ids ?? this.tracks().map((t) => t.id);
+    this.batchCancelled = false;
+    let i = 0;
+    for (; i < todo.length && !this.batchCancelled; i++) {
+      this.batch.set({ label, done: i, total: todo.length });
+      try { await step(todo[i]); } catch (e) { this.toast.error(errorMessage(e)); break; }
+    }
+    this.batch.set(null);
+    await this.load(true);
+    this.bumpCovers();
+    this.toast.success(`${label}: ${i} of ${todo.length} track(s) done on this device`);
+  }
+
+  private async runJobToEnd(launch: () => Promise<{ id: string }>) {
+    const started = await launch();
+    for (;;) {
+      const job = await this.api.currentJob();
+      if (!job || job.id !== started.id || job.status !== 'running') return;
+      await new Promise((r) => setTimeout(r, 400));
+    }
   }
 
   // ---- removing tracks ------------------------------------------------------------------

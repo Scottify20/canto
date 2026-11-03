@@ -21,6 +21,9 @@ export interface Track {
   initial_key: string;
   path: string;
   exists: boolean;
+  /** A metadata lookup was run for this entry / the user has reviewed it (reset when the file is re-imported) */
+  meta_fetched: boolean;
+  meta_reviewed: boolean;
   /** The file is absent because its drive isn't connected */
   offline: boolean;
   has_lrc: boolean;
@@ -53,7 +56,7 @@ export interface Proposal {
   accept: Partial<Record<TagField, boolean>>;
 }
 
-export type JobKind = 'import' | 'lyrics' | 'analyze' | 'covers';
+export type JobKind = 'import' | 'lyrics' | 'analyze' | 'covers' | 'match';
 
 export interface Job {
   id: string;
@@ -99,6 +102,8 @@ export interface Settings {
   multichannel_path: string;
   multichannel_gain_offset: number;
   has_discogs_token: boolean;
+  min_free_gb: number;
+  storage: StorageEntry[];
   folders?: Record<'input' | 'output' | 'multichannel', { path: string; ok: boolean; reason: string } | null>;
   providers: ProviderState[];
 }
@@ -110,7 +115,7 @@ export interface ProviderUpdate {
 }
 
 export type SettingsUpdate = Partial<
-  Omit<Settings, 'providers' | 'has_discogs_token'> & {
+  Omit<Settings, 'providers' | 'has_discogs_token' | 'storage' | 'folders'> & {
     discogs_token: string;
     lyrics_order: string[];
     providers: ProviderUpdate[];
@@ -302,7 +307,24 @@ export type LibraryFilter =
   | 'recent'
   | 'missing'
   | 'duplicates'
+  | 'meta-reviewed'
+  | 'meta-pending'
+  | 'meta-none'
   | 'review';
+
+export interface StorageEntry {
+  key: 'output' | 'multichannel';
+  label: string;
+  path: string;
+  online: boolean;
+  low: boolean;
+  total: number;
+  free: number;
+  used: number;
+}
+
+export type TaskKind = 'metadata' | 'lyrics' | 'covers' | 'analysis';
+export type RunWhere = 'server' | 'device';
 
 export interface BackupInfo {
   available: boolean;
