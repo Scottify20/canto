@@ -73,4 +73,6 @@ def load_settings() -> Settings:
 def save_settings(settings: Settings) -> None:
     with _lock:
         os.makedirs(BEETS_DIR, exist_ok=True)
-        SETTINGS_PATH.write_text(json.dumps(asdict(settings), indent=2))
+        temp = SETTINGS_PATH.with_suffix(".tmp")
+        temp.write_text(json.dumps(asdict(settings), indent=2))
+        os.replace(temp, SETTINGS_PATH)

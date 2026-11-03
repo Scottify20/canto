@@ -10,7 +10,7 @@ from ..core.jobs import jobs
 from ..services.filesystem import list_directory
 from ..services.health import system_health
 from ..services.storage import root_status, storage_report
-from .common import guard, space_guard
+from .common import ensure_idle, guard, space_guard
 
 router = APIRouter(prefix="/api")
 jobs.on_finish.append(lambda job: deps.library_backup.schedule() if job.status == "done" else None)
@@ -153,6 +153,7 @@ def update_tags(body: TagUpdate):
 
 @router.post("/tracks/remove")
 def remove_tracks(body: RemoveRequest):
+    ensure_idle("Removing tracks")
     removed = guard(lambda: deps.tracks.remove(body.ids, body.delete_files))
     deps.library_backup.schedule()
     return {"removed": removed}
@@ -160,6 +161,7 @@ def remove_tracks(body: RemoveRequest):
 
 @router.post("/library/clear")
 def clear_library(body: ClearRequest):
+    ensure_idle("Clearing the library")
     return {"removed": guard(lambda: deps.tracks.clear(body.delete_files))}
 
 
@@ -175,16 +177,20 @@ def backup_now():
 
 @router.post("/library/restore")
 def restore_backup():
+    ensure_idle("Restoring the backup")
     return guard(deps.library_backup.restore)
 
 
 @router.post("/library/rebase")
 def rebase_paths(body: RebaseRequest):
+    if not body.dry_run:
+        ensure_idle("Changing library paths")
     return guard(lambda: deps.library_backup.rebase(body.old_root, body.new_root, body.dry_run))
 
 
 @router.post("/library/prune-missing")
 def prune_missing():
+    ensure_idle("Removing missing entries")
     return {"removed": guard(deps.tracks.prune_missing)}
 
 

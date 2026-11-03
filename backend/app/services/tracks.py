@@ -1,6 +1,8 @@
 import io
 import os
 import re
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 
@@ -8,6 +10,7 @@ from beets import util as beets_util
 from beets.util import MoveOperation
 from PIL import Image
 
+from ..core.locks import item_lock
 from . import animated, covers
 from .beets_engine import BeetsEngine
 from .storage import volume_online
@@ -70,6 +73,9 @@ class TrackService:
     def __init__(self, engine: BeetsEngine):
         self.engine = engine
         self._art_cache: dict[tuple, bool] = {}
+        self._list_lock = threading.Lock()
+        self._list_started = -1.0
+        self._list_rows: list[dict] = []
 
     @property
     def lib(self):
@@ -129,6 +135,18 @@ class TrackService:
         }
 
     def list_tracks(self) -> list[dict]:
+        """Several devices poll this at once; a caller that arrives while a listing is being built reuses that
+        result only if it was started after the caller arrived, so nothing stale is ever returned."""
+        arrived = time.monotonic()
+        with self._list_lock:
+            if self._list_started >= arrived:
+                return self._list_rows
+            started = time.monotonic()
+            self._list_rows = self._build_list()
+            self._list_started = started
+            return self._list_rows
+
+    def _build_list(self) -> list[dict]:
         cache: dict[str, set[str]] = {}
         rows = [self._serialize(i, cache) for i in self.lib.items()]
         with ThreadPoolExecutor(max_workers=8) as pool:
@@ -170,6 +188,10 @@ class TrackService:
 
     # ---- tag editing -------------------------------------------------------
     def update_tags(self, item_id: int, tags: dict) -> dict:
+        with item_lock(item_id):
+            return self._update_tags(item_id, tags)
+
+    def _update_tags(self, item_id: int, tags: dict) -> dict:
         item = self.lib.get_item(item_id)
         if not item:
             raise LookupError("Track not found")
@@ -256,27 +278,29 @@ class TrackService:
 
     # ---- lyrics files ------------------------------------------------------
     def delete_lyrics(self, item_id: int, kind: str) -> None:
-        item = self.lib.get_item(item_id)
-        if not item or kind not in ("lrc", "ttml"):
-            raise LookupError("Track not found")
-        target = f"{sidecar_base(item)}.{kind}"
-        if os.path.exists(target):
-            os.remove(target)
+        with item_lock(item_id):
+            item = self.lib.get_item(item_id)
+            if not item or kind not in ("lrc", "ttml"):
+                raise LookupError("Track not found")
+            target = f"{sidecar_base(item)}.{kind}"
+            if os.path.exists(target):
+                os.remove(target)
 
     # ---- removal / cleanup --------------------------------------------------
     def remove(self, ids: list[int], delete_files: bool) -> int:
         removed = 0
         for item_id in ids:
-            item = self.lib.get_item(item_id)
-            if not item:
-                continue
-            path = item_path(item)
-            if delete_files:
-                for ext in SIDECAR_EXTS:
-                    side = f"{sidecar_base(item)}{ext}"
-                    if os.path.exists(side):
-                        os.remove(side)
-            item.remove(delete=delete_files, with_album=False)
+            with item_lock(item_id):
+                item = self.lib.get_item(item_id)
+                if not item:
+                    continue
+                path = item_path(item)
+                if delete_files:
+                    for ext in SIDECAR_EXTS:
+                        side = f"{sidecar_base(item)}{ext}"
+                        if os.path.exists(side):
+                            os.remove(side)
+                item.remove(delete=delete_files, with_album=False)
             if delete_files:
                 self._prune(os.path.dirname(path))
             removed += 1
@@ -315,13 +339,15 @@ class TrackService:
         return covers.cover_info(item_path(self._existing(item_id)))
 
     def set_cover(self, item_id: int, data: bytes) -> dict:
-        item = self._existing(item_id)
-        info = covers.embed_cover(item_path(item), data)
+        with item_lock(item_id):
+            item = self._existing(item_id)
+            info = covers.embed_cover(item_path(item), data)
         self._thumbnail.cache_clear()
         return info
 
     def remove_cover(self, item_id: int) -> None:
-        covers.remove_cover(item_path(self._existing(item_id)))
+        with item_lock(item_id):
+            covers.remove_cover(item_path(self._existing(item_id)))
         self._thumbnail.cache_clear()
 
     def cover_candidates(self, item_id: int) -> dict:

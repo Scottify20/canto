@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from ..core.http import RateLimited
 from ..core.jobs import Job
+from ..core.locks import item_lock
 from ..services.beets_engine import BeetsEngine
 from ..services.tracks import item_path, sidecar_base
 from .convert import build_lrc, build_ttml, is_usable, parse_ttml, strip_credits
@@ -162,12 +163,25 @@ class LyricsService:
             pass
 
     def process_item(self, item, opts: LyricsOptions) -> dict:
-        result = self._process_item(item, opts)
-        if opts.embed and result.get("lrc") and os.path.exists(item_path(item)):
-            self._embed_file(item, f"{sidecar_base(item)}.lrc")
+        """Provider lookups are slow, so the track is only locked while its files are read and written."""
+        with item_lock(item.id):
+            item.load()  # a batch holds items loaded earlier; the file may have been retagged or moved since
+            early, state = self._prepare(item, opts)
+        if early is not None:
+            return self._finish(item, opts, early)
+        notes: list[str] = []
+        candidates = self.gather(item.artist, item.title, item.album, state["duration"], notes)
+        with item_lock(item.id):
+            item.load()
+            return self._finish(item, opts, self._save(item, opts, state, candidates, notes))
+
+    def _finish(self, item, opts: LyricsOptions, result: dict) -> dict:
+        with item_lock(item.id):
+            if opts.embed and result.get("lrc") and os.path.exists(item_path(item)):
+                self._embed_file(item, f"{sidecar_base(item)}.lrc")
         return result
 
-    def _process_item(self, item, opts: LyricsOptions) -> dict:
+    def _prepare(self, item, opts: LyricsOptions) -> tuple[dict | None, dict]:
         base = sidecar_base(item)
         lrc_path, ttml_path = f"{base}.lrc", f"{base}.ttml"
         had_lrc = os.path.exists(lrc_path)
@@ -178,12 +192,11 @@ class LyricsService:
         need_lrc = opts.overwrite_lrc or not os.path.exists(lrc_path)
         need_ttml = opts.overwrite_ttml or not os.path.exists(ttml_path)
         result = {"id": item.id, "name": name, "lrc": None, "ttml": None}
+        state = {"result": result, "need_lrc": need_lrc, "need_ttml": need_ttml, "migrated_ttml": migrated_ttml, "duration": item.length or None}
         if not need_lrc and not need_ttml:
-            return {**result, "status": "skipped", "message": f"[Skipped] {name} (already has LRC & TTML)"}
+            return {**result, "status": "skipped", "message": f"[Skipped] {name} (already has LRC & TTML)"}, state
         if not os.path.exists(item_path(item)):
-            return {**result, "status": "error", "message": f"[Error] {name} (audio file is missing on disk — use 'Remove missing' or re-import)"}
-
-        duration = item.length or None
+            return {**result, "status": "error", "message": f"[Error] {name} (audio file is missing on disk — use 'Remove missing' or re-import)"}, state
         # Free conversion: an existing word-synced TTML can produce the LRC offline.
         if need_lrc and not need_ttml and os.path.exists(ttml_path):
             lines = existing_word_lines
@@ -192,15 +205,21 @@ class LyricsService:
                     lines = parse_ttml(handle.read())
             if is_usable(lines):
                 self._write(lrc_path, build_lrc(lines, item.title, item.artist, item.album))
-                return {**result, "status": "success", "lrc": "from local TTML", "message": f"[Success] {name} (LRC derived from existing TTML)"}
+                return {**result, "status": "success", "lrc": "from local TTML", "message": f"[Success] {name} (LRC derived from existing TTML)"}, state
+        return None, state
 
-        notes: list[str] = []
-        candidates = self.gather(item.artist, item.title, item.album, duration, notes)
+    def _save(self, item, opts: LyricsOptions, state: dict, candidates: list, notes: list[str]) -> dict:
+        base = sidecar_base(item)
+        lrc_path, ttml_path = f"{base}.lrc", f"{base}.ttml"
+        result, name, duration = state["result"], f"{item.artist} - {item.title}", state["duration"]
+        need_lrc, need_ttml = state["need_lrc"], state["need_ttml"]
+        if not os.path.exists(item_path(item)):
+            return {**result, "status": "error", "message": f"[Error] {name} (audio file is missing on disk — use 'Remove missing' or re-import)"}
         if candidates and candidates[0].instrumental:
             return {**result, "status": "instrumental", "message": f"[Instrumental] {name}"}
         candidates = [c for c in candidates if not c.instrumental]
         if not candidates:
-            if migrated_ttml:
+            if state["migrated_ttml"]:
                 return {
                     **result,
                     "status": "success",
@@ -300,6 +319,10 @@ class LyricsService:
         return {"candidates": out, "notes": sorted(set(notes))}
 
     def save_content(self, item_id: int, kind: str, content: str, embed: bool = False) -> str:
+        with item_lock(item_id):
+            return self._save_content(item_id, kind, content, embed)
+
+    def _save_content(self, item_id: int, kind: str, content: str, embed: bool) -> str:
         item = self.engine.lib.get_item(item_id)
         if not item or kind not in ("lrc", "ttml"):
             raise LookupError("Track not found")

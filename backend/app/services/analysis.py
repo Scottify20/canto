@@ -8,6 +8,8 @@ import threading
 
 import numpy as np
 
+from ..core.locks import item_lock
+
 REFERENCE_LUFS = -18.0  # ReplayGain 2.0 reference level
 SAMPLE_RATE = 22050
 CONFIDENT = 0.55  # Essentia key strength above which no second opinion is needed
@@ -296,28 +298,33 @@ def detect_bpm(path: str, length: float = 0.0) -> tuple[int, str]:
 
 def analyze_item(item, force: bool = False) -> list[str]:
     """Fill missing ReplayGain/key tags on a beets item. Returns human-readable results."""
+    item.load()  # batches hold items loaded earlier; the file may have been retagged or moved since
     path = os.fsdecode(item.path)
     if not os.path.exists(path):
         raise AnalysisError("audio file is missing on disk")
     done = []
+    found: dict[str, object] = {}
     if force or item.get("rg_track_gain") in (None, ""):
         values, engine = replaygain_values(path, item.get("channels") or 2)
-        for key, value in values.items():
-            item[key] = value
+        found.update(values)
         done.append(f"gain {values['rg_track_gain']:+.2f} dB ({engine})")
     _check_cancel()
     if force or not item.get("initial_key"):
         key, engine = detect_key(path, item.length or 0)
-        item["initial_key"] = key
+        found["initial_key"] = key
         done.append(f"key {key} ({engine})")
     _check_cancel()
     if force or not item.get("bpm"):
         bpm, engine = detect_bpm(path, item.length or 0)
-        item["bpm"] = bpm
+        found["bpm"] = bpm
         done.append(f"bpm {bpm} ({engine})")
     if done:
-        item.try_write()
-        item.store()
+        with item_lock(item.id):
+            item.load()
+            for key, value in found.items():
+                item[key] = value
+            item.try_write()
+            item.store()
     return done
 
 

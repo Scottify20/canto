@@ -5,7 +5,7 @@ from .. import deps
 from ..services import maintenance as maint_module
 from ..services.maintenance import MaintenanceService
 from ..services.structure import preview
-from .common import guard
+from .common import ensure_idle, guard
 
 router = APIRouter(prefix="/api")
 maintenance = MaintenanceService(deps.engine, deps.tracks)
@@ -40,5 +40,6 @@ def maintenance_scan():
 
 @router.post("/maintenance/run")
 def maintenance_run(body: MaintenanceRequest):
+    ensure_idle("Maintenance")
     actions = [a for a in body.actions if a in maint_module.ACTIONS]
     return {"done": guard(lambda: maintenance.run(actions))}

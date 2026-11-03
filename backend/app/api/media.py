@@ -1,6 +1,7 @@
 import os
 import tempfile
 
+from starlette.concurrency import run_in_threadpool
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
@@ -47,7 +48,7 @@ async def upload_cover(item_id: int, request: Request):
     data = await request.body()
     if not data or len(data) > MAX_UPLOAD:
         raise HTTPException(400, "Send an image up to 25 MB as the request body")
-    return guard(lambda: deps.tracks.set_cover(item_id, data))
+    return await run_in_threadpool(lambda: guard(lambda: deps.tracks.set_cover(item_id, data)))
 
 
 @router.delete("/tracks/{item_id}/cover")
@@ -78,11 +79,11 @@ async def upload_animated(item_id: int, request: Request, name: str = "cover.mp4
                 handle.close()
                 os.unlink(tmp)
                 raise HTTPException(413, "Video is larger than 400 MB")
-            handle.write(chunk)
+            await run_in_threadpool(handle.write, chunk)
     try:
         if not size:
             raise HTTPException(400, "Send the video file as the request body")
-        return guard(lambda: deps.tracks.animated_set(item_id, tmp, ext, shape))
+        return await run_in_threadpool(lambda: guard(lambda: deps.tracks.animated_set(item_id, tmp, ext, shape)))
     finally:
         if os.path.exists(tmp):
             os.unlink(tmp)

@@ -7,8 +7,28 @@ system disk, and treating its files as deleted would wipe the library entries.
 import os
 import re
 import shutil
+import threading
+import time
 
 _REMOVABLE = re.compile(r"^(/mnt/[^/]+|/media/[^/]+/[^/]+|/run/media/[^/]+/[^/]+|/Volumes/[^/]+)")
+
+
+_mount_cache: dict[str, tuple[float, bool]] = {}
+_mount_lock = threading.Lock()
+_MOUNT_TTL = 2.0
+
+
+def _is_mount(base: str) -> bool:
+    """os.path.ismount hits the disk (slow on /mnt drives); listing a library would otherwise do it once per track."""
+    now = time.monotonic()
+    with _mount_lock:
+        hit = _mount_cache.get(base)
+        if hit and now - hit[0] < _MOUNT_TTL:
+            return hit[1]
+    online = os.path.ismount(base)
+    with _mount_lock:
+        _mount_cache[base] = (now, online)
+    return online
 
 
 def volume_online(path: str) -> bool:
@@ -22,7 +42,7 @@ def volume_online(path: str) -> bool:
     match = _REMOVABLE.match(full)
     if match:
         base = match.group(1)
-        return os.path.ismount(base)
+        return _is_mount(base)
     return True
 
 

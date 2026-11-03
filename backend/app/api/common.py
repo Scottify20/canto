@@ -15,6 +15,14 @@ def guard(call):
         raise HTTPException(500, f"{type(exc).__name__}: {exc}")
 
 
+def ensure_idle(what: str = "This") -> None:
+    """Refuse changes that restructure the library while a background job is working on it (HTTP 409)."""
+    from ..core.jobs import jobs
+
+    if jobs.is_running():
+        raise HTTPException(409, f"{what} is locked while a {jobs.current.kind} job is running. Wait for it to finish or cancel it.")
+
+
 def ensure_space(keys: tuple[str, ...] = ("output", "multichannel")) -> None:
     check_space(keys)
 
