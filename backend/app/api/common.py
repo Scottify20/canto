@@ -16,6 +16,10 @@ def guard(call):
 
 
 def ensure_space(keys: tuple[str, ...] = ("output", "multichannel")) -> None:
+    check_space(keys)
+
+
+def check_space(keys: tuple[str, ...]) -> None:
     """Refuse writing actions while a library drive is under the free-space limit (HTTP 507)."""
     from .. import deps
     from ..services.storage import low_space_message
@@ -28,4 +32,5 @@ def ensure_space(keys: tuple[str, ...] = ("output", "multichannel")) -> None:
 def space_guard():
     from fastapi import Depends
 
-    return Depends(ensure_space)
+    # FastAPI would treat a tuple parameter of the dependency itself as a second body field
+    return Depends(lambda: check_space(("output", "multichannel")))
