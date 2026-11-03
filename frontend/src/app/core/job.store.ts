@@ -22,6 +22,7 @@ export class JobStore {
   /** Called when a job ends or makes visible progress so the table can refresh. */
   onChange?: (finished: boolean) => void;
 
+  private watcher?: ReturnType<typeof setInterval>;
   private timer?: ReturnType<typeof setInterval>;
   private lastProgress = -1;
   private jobId = '';
@@ -36,6 +37,20 @@ export class JobStore {
     } catch {
       /* offline */
     }
+  }
+
+  /** Jobs can be started from another device (a phone driving this computer), so keep looking for one while idle. */
+  watch() {
+    clearInterval(this.watcher);
+    this.watcher = setInterval(async () => {
+      if (this.running() || this.inFlight || document.hidden) return;
+      try {
+        const job = await this.api.currentJob();
+        if (job && job.status === 'running' && !this.running()) this.adopt(job);
+      } catch {
+        /* offline */
+      }
+    }, 3000);
   }
 
   async start(launch: () => Promise<Job>) {

@@ -171,6 +171,7 @@ export class App implements OnInit {
     await this.settings.hydrateFromBackend();
     await this.lib.load();
     await this.jobs.resume();
+    this.jobs.watch();
     void this.lib.loadProposals();
     if (!this.lib.tracks().length && this.settings.inputPath()) this.view.set('inbox');
     void this.inbox.refresh(true);

@@ -65,6 +65,9 @@ export function errorMessage(err: unknown): string {
     if (err.status === 401 && isNativeAndroid) return 'The PIN is missing or wrong. Open Remote control and scan the QR code on the computer again.';
     if (err.status === 429) return 'Too many wrong PINs. Wait a minute, then rescan the QR code.';
     const detail = err.error?.detail;
+    if (Array.isArray(detail) && detail.length) {
+      return detail.map((d: { loc?: unknown[]; msg?: string }) => `${(d.loc ?? []).slice(1).join('.') || 'request'}: ${d.msg ?? 'invalid'}`).join('\n');
+    }
     return typeof detail === 'string' ? detail : err.message;
   }
   return err instanceof Error ? err.message : String(err);

@@ -1,6 +1,8 @@
 from dataclasses import replace
 
 from fastapi import APIRouter, HTTPException, Query
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 from .. import deps
@@ -44,7 +46,7 @@ class SettingsUpdate(BaseModel):
 
 class TagUpdate(BaseModel):
     id: int
-    tags: dict[str, str | int | bool | None]
+    tags: dict[str, Any]
 
 
 class MatchRequest(BaseModel):

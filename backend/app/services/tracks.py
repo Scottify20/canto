@@ -183,7 +183,10 @@ class TrackService:
             if key in LIST_FIELDS:
                 setattr(item, key, [g.strip() for g in re.split(r"[;,/]", str(value)) if g.strip()])
             elif key in INT_FIELDS:
-                setattr(item, key, int(value) if str(value).strip().isdigit() else 0)
+                try:
+                    setattr(item, key, int(float(str(value).strip())))
+                except ValueError:
+                    setattr(item, key, 0)
             elif key in FLOAT_FIELDS:
                 try:
                     setattr(item, key, float(str(value).strip()))
