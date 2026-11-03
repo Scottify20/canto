@@ -222,6 +222,7 @@ export class LibraryStore {
   /** `reviewed` records that the user looked at the proposal (accepted or rejected); skipping it for later leaves it unreviewed. */
   dismiss(id: number, reviewed = false) {
     const had = !!this.proposals()[id];
+    this.handled.add(id);
     this.proposals.update((all) => { const n = { ...all }; delete n[id]; return n; });
     if (had) {
       // keeps a live proposal refresh from re-adding the card before the server has resolved it
@@ -231,6 +232,8 @@ export class LibraryStore {
   }
 
   private resolving = new Set<number>();
+  /** Tracks reviewed this session: a slow or stale server refresh must never bring their card back */
+  private handled = new Set<number>();
 
   /** Proposals are kept on the server, so lookups made earlier (or from another device) come back after a reload. */
   async loadProposals(announce = false) {
@@ -242,7 +245,7 @@ export class LibraryStore {
       for (const [key, candidates] of Object.entries(stored)) {
         const id = Number(key);
         const track = byId.get(id);
-        if (!track || next[id] || this.resolving.has(id)) continue;
+        if (!track || next[id] || this.resolving.has(id) || this.handled.has(id)) continue;
         const proposal = this.buildProposal(track, candidates);
         if (this.changedFields(track, proposal).length) { next[id] = proposal; added++; }
         else void this.api.resolveMatch(id, false).catch(() => undefined);
@@ -255,6 +258,7 @@ export class LibraryStore {
   }
 
   async findMatch(track: Track, announce = true) {
+    this.handled.delete(track.id);
     this.setBusy(track.id, 'match');
     try {
       const candidates = await this.api.match(track.id);
@@ -316,6 +320,7 @@ export class LibraryStore {
       const skip = new Set(Object.keys(this.proposals()).map(Number));
       const todo = ids.filter((id) => !skip.has(id));
       if (!todo.length) { this.toast.info('Nothing to fetch'); return; }
+      todo.forEach((id) => this.handled.delete(id));
       return this.jobs.start(() => this.api.startMatch(todo));
     }
     const byId = new Map(this.tracks().map((t) => [t.id, t]));

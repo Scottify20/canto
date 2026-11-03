@@ -86,11 +86,17 @@ class MatchStore:
             item = lib.get_item(item_id)
             job.message = f"Matching {n}/{len(todo)}"
             if item:
+                name = f"{item.artist} - {item.title}"
                 try:
-                    if self.lookup(item_id):
+                    candidates = self.lookup(item_id)
+                    if candidates:
                         found += 1
+                        best = candidates[0]
+                        job.write(f"[Match] {name}: {best.get('source', '?')} {best.get('similarity', '')}%")
+                    else:
+                        job.write(f"[No match] {name}")
                 except Exception as exc:  # noqa: BLE001 - one bad lookup must not stop the batch
-                    job.write(f"[Error] {item.artist} - {item.title}: {exc}")
+                    job.write(f"[Error] {name}: {exc}")
             job.done = n
         job.message = f"Looked up {job.done} track(s), {found} with candidates to review"
         job.write(f"[Done] {job.message}")
